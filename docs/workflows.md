@@ -78,4 +78,4 @@ Move bottle
 
 ↓
 
-Update bottle status
+Create / update bottle location
