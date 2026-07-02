@@ -1,0 +1,16 @@
+__pycache__/
+.coverage
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+htmlcov/
+*.py[cod]
+data/
+reports/
+logs/
+cache/
+.env
+!data/.gitkeep
+!reports/.gitkeep
+!logs/.gitkeep
+!cache/.gitkeep
