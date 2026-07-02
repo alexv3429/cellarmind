@@ -16,6 +16,16 @@ Example:
 
 There is only one Wine for this definition.
 
+## Wine variant
+
+It is a variant of a wine identity that may age differently.
+
+Each variant has its own:
+
+- format
+- drinking window
+- price
+
 ## Bottle
 
 A Bottle represents one physical bottle.
@@ -24,7 +34,6 @@ Several bottles may refer to the same Wine.
 
 Each bottle has its own:
 
-- format
 - location
 - purchase information
 - opening date
