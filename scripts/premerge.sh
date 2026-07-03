@@ -30,5 +30,13 @@ uv run cellarmind normalize examples/cave.sample.csv --output "$CANONICAL_CSV"
 echo "==> Canonical CSV preview"
 cat "$CANONICAL_CSV"
 
+DATABASE_PATH="$TMP_DIR/cellarmind.sqlite"
+
+echo "==> Initializing database"
+uv run cellarmind db init --path "$DATABASE_PATH"
+
+echo "==> Importing sample CSV"
+uv run cellarmind import examples/cave.sample.csv --database "$DATABASE_PATH"
+
 echo
 echo "Pre-merge checks passed."
