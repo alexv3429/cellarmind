@@ -7,6 +7,7 @@ from rich.table import Table
 
 from cellarmind.importing.normalizer import normalize_csv_to_canonical
 from cellarmind.importing.schema import validate_csv_schema
+from cellarmind.importing.sqlite_importer import import_csv_to_database
 from cellarmind.infrastructure.csv_inspector import inspect_csv
 from cellarmind.storage.sqlite import initialize_database
 
@@ -16,6 +17,14 @@ OutputPathOption = Annotated[
     Path | None, typer.Option("--output", "-o", help="Output path for the canonical CSV.")
 ]
 DatabasePathOption = Annotated[Path, typer.Option("--path", "-p", help="SQLite database path.")]
+ImportDatabasePathOption = Annotated[
+    Path,
+    typer.Option(
+        "--database",
+        "-d",
+        help="SQLite database path.",
+    ),
+]
 
 app = typer.Typer(help="CellarMind: wine cellar enrichment and maturity analysis.")
 db_app = typer.Typer(help="Manage the CellarMind SQLite database.")
@@ -129,3 +138,27 @@ def init_database(path: DatabasePathOption = DEFAULT_DATABASE_PATH) -> None:
     console.print(f"Path: {result.path}")
     console.print(f"Schema version: {result.schema_version}")
     console.print(f"Tables: {len(result.tables)}")
+
+
+@app.command("import")
+def import_cellar(
+    path: Path,
+    database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+) -> None:
+    """Import a cellar CSV into the SQLite database."""
+    if not path.exists():
+        raise typer.BadParameter(f"File does not exist: {path}")
+
+    try:
+        result = import_csv_to_database(path, database)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print("[green]CSV imported[/green]")
+    console.print(f"Database: {result.database_path}")
+    console.print(f"Import session: {result.import_session_id}")
+    console.print(f"Source rows: {result.source_rows}")
+    console.print(f"Created bottles: {result.created_bottles}")
+    console.print(f"Wines touched: {result.wines}")
+    console.print(f"Wine variants touched: {result.wine_variants}")
