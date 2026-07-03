@@ -59,6 +59,8 @@ def test_list_bottles_command(tmp_path: Path) -> None:
 
     import_csv_to_database(input_path, database_path)
 
+    assert len(list_bottles(database_path)) == 1
+
     runner = CliRunner()
     result = runner.invoke(
         app,
@@ -66,6 +68,7 @@ def test_list_bottles_command(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0
+    assert str(database_path) in result.output
     assert "Bottles" in result.output
     assert "Domaine Test" in result.output
     assert "Cuvée Test" in result.output

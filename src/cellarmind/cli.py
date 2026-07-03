@@ -14,7 +14,7 @@ from cellarmind.storage.sqlite import initialize_database
 from cellarmind.storage.stats import get_database_stats
 
 DEFAULT_DATABASE_PATH = Path("data/cellarmind.sqlite")
-LIMIT_OPTION = Annotated[
+LimitOption = Annotated[
     int,
     typer.Option(
         "--limit",
@@ -46,7 +46,7 @@ db_app = typer.Typer(help="Manage the CellarMind SQLite database.")
 app.add_typer(db_app, name="db")
 list_app = typer.Typer(help="List cellar contents.")
 app.add_typer(list_app, name="list")
-console = Console()
+console = Console(width=160)
 
 
 @app.command()
@@ -216,7 +216,7 @@ def database_stats(path: Path = DEFAULT_DATABASE_PATH) -> None:
 @list_app.command("bottles")
 def list_bottle_inventory(
     database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
-    limit: LIMIT_OPTION = 50,
+    limit: LimitOption = 50,
 ) -> None:
     """List physical bottles from the cellar database."""
     try:
@@ -225,21 +225,23 @@ def list_bottle_inventory(
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
 
+    console.print(f"Database: {database}")
+
     if not bottles:
         console.print("[yellow]No bottles found[/yellow]")
         return
 
-    table = Table(title="Bottles")
-    table.add_column("ID", justify="right")
-    table.add_column("Producer")
-    table.add_column("Cuvée")
-    table.add_column("Vintage", justify="right")
-    table.add_column("Appellation")
-    table.add_column("Color")
-    table.add_column("Format")
-    table.add_column("Status")
-    table.add_column("Cellar")
-    table.add_column("Location")
+    table = Table(title="Bottles", expand=False)
+    table.add_column("ID", justify="right", no_wrap=True)
+    table.add_column("Producer", no_wrap=True)
+    table.add_column("Cuvée", no_wrap=True)
+    table.add_column("Vintage", justify="right", no_wrap=True)
+    table.add_column("Appellation", no_wrap=True)
+    table.add_column("Color", no_wrap=True)
+    table.add_column("Format", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Cellar", no_wrap=True)
+    table.add_column("Location", no_wrap=True)
 
     for bottle in bottles:
         table.add_row(
