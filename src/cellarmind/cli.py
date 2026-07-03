@@ -10,6 +10,7 @@ from cellarmind.importing.schema import validate_csv_schema
 from cellarmind.importing.sqlite_importer import import_csv_to_database
 from cellarmind.infrastructure.csv_inspector import inspect_csv
 from cellarmind.storage.sqlite import initialize_database
+from cellarmind.storage.stats import get_database_stats
 
 DEFAULT_DATABASE_PATH = Path("data/cellarmind.sqlite")
 
@@ -162,3 +163,35 @@ def import_cellar(
     console.print(f"Created bottles: {result.created_bottles}")
     console.print(f"Wines touched: {result.wines}")
     console.print(f"Wine variants touched: {result.wine_variants}")
+
+
+@db_app.command("stats")
+def database_stats(path: Path = DEFAULT_DATABASE_PATH) -> None:
+    """Show SQLite database statistics."""
+    try:
+        stats = get_database_stats(path)
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print("[bold]Database stats[/bold]")
+    console.print(f"Path: {stats.database_path}")
+    console.print(f"Import sessions: {stats.import_sessions}")
+    console.print(f"Wines: {stats.wines}")
+    console.print(f"Wine variants: {stats.wine_variants}")
+    console.print(f"Bottles: {stats.bottles}")
+    console.print(f"Active bottles: {stats.active_bottles}")
+    console.print(f"Cellars: {stats.cellars}")
+    console.print(f"Locations: {stats.locations}")
+    console.print(f"Location history rows: {stats.bottle_location_history_rows}")
+    console.print(f"Active location rows: {stats.active_location_rows}")
+
+    if stats.bottle_status_counts:
+        table = Table(title="Bottle statuses")
+        table.add_column("Status")
+        table.add_column("Count", justify="right")
+
+        for item in stats.bottle_status_counts:
+            table.add_row(item.status, str(item.count))
+
+        console.print(table)
