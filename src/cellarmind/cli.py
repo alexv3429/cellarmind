@@ -1,11 +1,17 @@
 from pathlib import Path
+from typing import Annotated
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from cellarmind.importing.normalizer import normalize_csv_to_canonical
 from cellarmind.importing.schema import validate_csv_schema
 from cellarmind.infrastructure.csv_inspector import inspect_csv
+
+OutputPathOption = Annotated[
+    Path | None, typer.Option("--output", "-o", help="Output path for the canonical CSV.")
+]
 
 app = typer.Typer(help="CellarMind: wine cellar enrichment and maturity analysis.")
 console = Console()
@@ -85,3 +91,24 @@ def validate(path: Path) -> None:
             console.print(f"- {field}: {', '.join(columns)}")
 
     raise typer.Exit(code=1)
+
+
+@app.command()
+def normalize(
+    path: Path,
+    output: OutputPathOption = None,
+) -> None:
+    """Normalize a cellar CSV to CellarMind canonical import format."""
+    if not path.exists():
+        raise typer.BadParameter(f"File does not exist: {path}")
+
+    try:
+        result = normalize_csv_to_canonical(path, output)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print("[green]Canonical CSV created[/green]")
+    console.print(f"Input: {result.input_path}")
+    console.print(f"Output: {result.output_path}")
+    console.print(f"Rows: {result.rows}")
