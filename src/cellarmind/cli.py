@@ -4,6 +4,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from cellarmind.importing.schema import validate_csv_schema
 from cellarmind.infrastructure.csv_inspector import inspect_csv
 
 app = typer.Typer(help="CellarMind: wine cellar enrichment and maturity analysis.")
@@ -48,3 +49,39 @@ def inspect(path: Path) -> None:
             table.add_row(str(value), str(count))
 
         console.print(table)
+
+
+@app.command()
+def validate(path: Path) -> None:
+    """Validate that a CSV can be imported by CellarMind."""
+    if not path.exists():
+        raise typer.BadParameter(f"File does not exist: {path}")
+
+    result = validate_csv_schema(path)
+
+    if result.valid:
+        console.print("[green]Valid CSV[/green]")
+
+        table = Table(title="Column mapping")
+        table.add_column("Canonical field")
+        table.add_column("CSV column")
+
+        for canonical, original in result.mapping.items():
+            table.add_row(canonical, original)
+
+        console.print(table)
+        return
+
+    console.print("[red]Invalid CSV[/red]")
+
+    if result.missing:
+        console.print("\n[bold]Missing required fields[/bold]")
+        for field in result.missing:
+            console.print(f"- {field}")
+
+    if result.conflicts:
+        console.print("\n[bold]Conflicting columns[/bold]")
+        for field, columns in result.conflicts.items():
+            console.print(f"- {field}: {', '.join(columns)}")
+
+    raise typer.Exit(code=1)
