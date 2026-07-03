@@ -128,7 +128,7 @@ ON bottle (status);
 CREATE INDEX IF NOT EXISTS idx_bottle_location_history_bottle_id
 ON bottle_location_history (bottle_id);
 
-CREATE INDEX IF NOT EXISTS idx_bottle_location_history_active
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bottle_location_history_active
 ON bottle_location_history (bottle_id)
 WHERE ended_at IS NULL;
 

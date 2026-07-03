@@ -75,3 +75,82 @@ def test_db_init_command_creates_database(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert database_path.exists()
     assert "Database initialized" in result.output
+
+
+def test_database_rejects_multiple_active_locations_for_same_bottle(tmp_path: Path) -> None:
+    database_path = tmp_path / "cellarmind.sqlite"
+    initialize_database(database_path)
+
+    with connect_database(database_path) as connection:
+        wine_id = connection.execute(
+            """
+            INSERT INTO wine (producer, cuvee, vintage, appellation, color)
+            VALUES ('Domaine Test', 'Cuvée Test', 2020, 'Test Appellation', 'Rouge')
+            RETURNING id
+            """
+        ).fetchone()[0]
+
+        wine_variant_id = connection.execute(
+            """
+            INSERT INTO wine_variant (wine_id, format)
+            VALUES (?, '750ml')
+            RETURNING id
+            """,
+            (wine_id,),
+        ).fetchone()[0]
+
+        bottle_id = connection.execute(
+            """
+            INSERT INTO bottle (wine_variant_id)
+            VALUES (?)
+            RETURNING id
+            """,
+            (wine_variant_id,),
+        ).fetchone()[0]
+
+        cellar_id = connection.execute(
+            """
+            INSERT INTO cellar (name)
+            VALUES ('Home cellar')
+            RETURNING id
+            """
+        ).fetchone()[0]
+
+        location_a_id = connection.execute(
+            """
+            INSERT INTO location (cellar_id, name)
+            VALUES (?, 'Rack A')
+            RETURNING id
+            """,
+            (cellar_id,),
+        ).fetchone()[0]
+
+        location_b_id = connection.execute(
+            """
+            INSERT INTO location (cellar_id, name)
+            VALUES (?, 'Rack B')
+            RETURNING id
+            """,
+            (cellar_id,),
+        ).fetchone()[0]
+
+        connection.execute(
+            """
+            INSERT INTO bottle_location_history (bottle_id, location_id)
+            VALUES (?, ?)
+            """,
+            (bottle_id, location_a_id),
+        )
+
+        try:
+            connection.execute(
+                """
+                INSERT INTO bottle_location_history (bottle_id, location_id)
+                VALUES (?, ?)
+                """,
+                (bottle_id, location_b_id),
+            )
+        except Exception as exc:
+            assert "UNIQUE constraint failed" in str(exc)
+        else:
+            raise AssertionError("Expected multiple active locations to be rejected")
