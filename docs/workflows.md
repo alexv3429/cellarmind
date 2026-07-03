@@ -18,7 +18,7 @@ Import into database (SQLite)
 
 ## Enrichment
 
-Wine
+WineVariant
 
 ↓
 
