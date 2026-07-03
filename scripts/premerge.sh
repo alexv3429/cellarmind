@@ -38,5 +38,8 @@ uv run cellarmind db init --path "$DATABASE_PATH"
 echo "==> Importing sample CSV"
 uv run cellarmind import examples/cave.sample.csv --database "$DATABASE_PATH"
 
+echo "==> Database stats"
+uv run cellarmind db stats --path "$DATABASE_PATH"
+
 echo
 echo "Pre-merge checks passed."
