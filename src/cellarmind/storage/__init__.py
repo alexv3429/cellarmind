@@ -1,3 +1,4 @@
+from cellarmind.storage.inventory import BottleListItem, list_bottles
 from cellarmind.storage.sqlite import (
     DatabaseInitResult,
     connect_database,
@@ -16,4 +17,6 @@ __all__ = [
     "BottleStatusCount",
     "DatabaseStats",
     "get_database_stats",
+    "BottleListItem",
+    "list_bottles",
 ]

@@ -41,5 +41,8 @@ uv run cellarmind import examples/cave.sample.csv --database "$DATABASE_PATH"
 echo "==> Database stats"
 uv run cellarmind db stats --path "$DATABASE_PATH"
 
+echo "==> Listing bottles"
+uv run cellarmind list bottles --database "$DATABASE_PATH" --limit 10
+
 echo
 echo "Pre-merge checks passed."
