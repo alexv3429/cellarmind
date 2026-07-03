@@ -15,6 +15,15 @@ REQUIRED_FIELDS: tuple[str, ...] = (
     "color",
 )
 
+OPTIONAL_FIELDS: tuple[str, ...] = (
+    "format",
+    "quantity",
+    "cellar",
+    "location",
+)
+
+CANONICAL_FIELDS: tuple[str, ...] = REQUIRED_FIELDS + OPTIONAL_FIELDS
+
 COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "producer": ("producer", "producteur"),
     "cuvee": ("cuvee", "cuvée", "wine", "vin", "cuvée / vin", "cuvee / vin"),
@@ -30,6 +39,29 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "appellation": ("appellation",),
     "color": ("color", "couleur"),
+    "format": (
+        "format",
+        "bottle format",
+        "format bouteille",
+        "contenance",
+        "contenant",
+        "taille",
+    ),
+    "quantity": (
+        "quantity",
+        "qty",
+        "quantité",
+        "quantite",
+        "nombre",
+        "nb",
+    ),
+    "cellar": ("cellar", "cave"),
+    "location": (
+        "location",
+        "emplacement",
+        "place",
+        "casier",
+    ),
 }
 
 
@@ -67,7 +99,7 @@ def validate_csv_schema(path: Path) -> CsvSchemaValidation:
     missing: list[str] = []
     conflicts: dict[str, tuple[str, ...]] = {}
 
-    for canonical_name in REQUIRED_FIELDS:
+    for canonical_name in CANONICAL_FIELDS:
         aliases = COLUMN_ALIASES[canonical_name]
         matches: list[str] = []
 
@@ -77,7 +109,8 @@ def validate_csv_schema(path: Path) -> CsvSchemaValidation:
         unique_matches = tuple(dict.fromkeys(matches))
 
         if len(unique_matches) == 0:
-            missing.append(canonical_name)
+            if canonical_name in REQUIRED_FIELDS:
+                missing.append(canonical_name)
         elif len(unique_matches) == 1:
             mapping[canonical_name] = unique_matches[0]
         else:
