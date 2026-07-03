@@ -9,15 +9,29 @@ from cellarmind.importing.normalizer import normalize_csv_to_canonical
 from cellarmind.importing.schema import validate_csv_schema
 from cellarmind.importing.sqlite_importer import import_csv_to_database
 from cellarmind.infrastructure.csv_inspector import inspect_csv
+from cellarmind.storage.inventory import list_bottles
 from cellarmind.storage.sqlite import initialize_database
 from cellarmind.storage.stats import get_database_stats
 
 DEFAULT_DATABASE_PATH = Path("data/cellarmind.sqlite")
+LimitOption = Annotated[
+    int,
+    typer.Option(
+        "--limit",
+        "-l",
+        min=1,
+        help="Maximum number of rows to display.",
+    ),
+]
 
 OutputPathOption = Annotated[
-    Path | None, typer.Option("--output", "-o", help="Output path for the canonical CSV.")
+    Path | None,
+    typer.Option("--output", "-o", help="Output path for the canonical CSV."),
 ]
-DatabasePathOption = Annotated[Path, typer.Option("--path", "-p", help="SQLite database path.")]
+DatabasePathOption = Annotated[
+    Path,
+    typer.Option("--path", "-p", help="SQLite database path."),
+]
 ImportDatabasePathOption = Annotated[
     Path,
     typer.Option(
@@ -30,7 +44,9 @@ ImportDatabasePathOption = Annotated[
 app = typer.Typer(help="CellarMind: wine cellar enrichment and maturity analysis.")
 db_app = typer.Typer(help="Manage the CellarMind SQLite database.")
 app.add_typer(db_app, name="db")
-console = Console()
+list_app = typer.Typer(help="List cellar contents.")
+app.add_typer(list_app, name="list")
+console = Console(width=160)
 
 
 @app.command()
@@ -195,3 +211,50 @@ def database_stats(path: Path = DEFAULT_DATABASE_PATH) -> None:
             table.add_row(item.status, str(item.count))
 
         console.print(table)
+
+
+@list_app.command("bottles")
+def list_bottle_inventory(
+    database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+    limit: LimitOption = 50,
+) -> None:
+    """List physical bottles from the cellar database."""
+    try:
+        bottles = list_bottles(database, limit=limit)
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"Database: {database}")
+
+    if not bottles:
+        console.print("[yellow]No bottles found[/yellow]")
+        return
+
+    table = Table(title="Bottles", expand=False)
+    table.add_column("ID", justify="right", no_wrap=True)
+    table.add_column("Producer", no_wrap=True)
+    table.add_column("Cuvée", no_wrap=True)
+    table.add_column("Vintage", justify="right", no_wrap=True)
+    table.add_column("Appellation", no_wrap=True)
+    table.add_column("Color", no_wrap=True)
+    table.add_column("Format", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Cellar", no_wrap=True)
+    table.add_column("Location", no_wrap=True)
+
+    for bottle in bottles:
+        table.add_row(
+            str(bottle.bottle_id),
+            bottle.producer,
+            bottle.cuvee,
+            str(bottle.vintage),
+            bottle.appellation,
+            bottle.color,
+            bottle.format,
+            bottle.status,
+            bottle.cellar or "",
+            bottle.location or "",
+        )
+
+    console.print(table)
