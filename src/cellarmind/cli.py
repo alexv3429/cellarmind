@@ -8,12 +8,18 @@ from rich.table import Table
 from cellarmind.importing.normalizer import normalize_csv_to_canonical
 from cellarmind.importing.schema import validate_csv_schema
 from cellarmind.infrastructure.csv_inspector import inspect_csv
+from cellarmind.storage.sqlite import initialize_database
+
+DEFAULT_DATABASE_PATH = Path("data/cellarmind.sqlite")
 
 OutputPathOption = Annotated[
     Path | None, typer.Option("--output", "-o", help="Output path for the canonical CSV.")
 ]
+DatabasePathOption = Annotated[Path, typer.Option("--path", "-p", help="SQLite database path.")]
 
 app = typer.Typer(help="CellarMind: wine cellar enrichment and maturity analysis.")
+db_app = typer.Typer(help="Manage the CellarMind SQLite database.")
+app.add_typer(db_app, name="db")
 console = Console()
 
 
@@ -112,3 +118,14 @@ def normalize(
     console.print(f"Input: {result.input_path}")
     console.print(f"Output: {result.output_path}")
     console.print(f"Rows: {result.rows}")
+
+
+@db_app.command("init")
+def init_database(path: DatabasePathOption = DEFAULT_DATABASE_PATH) -> None:
+    """Initialize a CellarMind SQLite database."""
+    result = initialize_database(path)
+
+    console.print("[green]Database initialized[/green]")
+    console.print(f"Path: {result.path}")
+    console.print(f"Schema version: {result.schema_version}")
+    console.print(f"Tables: {len(result.tables)}")
