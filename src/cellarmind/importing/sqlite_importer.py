@@ -107,7 +107,7 @@ def _get_or_create_wine(connection, row: dict[str, object]) -> int:
     values = (
         _text(row, "producer"),
         _text(row, "cuvee"),
-        _parse_vintage(_text(row, "vintage")),
+        _canonicalize_vintage(_text(row, "vintage")),
         _text(row, "appellation"),
         _text(row, "color"),
     )
@@ -247,11 +247,17 @@ def _text(row: dict[str, object], field: str) -> str:
     return str(value).strip()
 
 
-def _parse_vintage(value: str) -> int:
-    try:
-        return int(value)
-    except ValueError as exc:
-        raise ValueError(f"Invalid vintage: {value!r}") from exc
+def _canonicalize_vintage(value: str) -> str:
+    text = value.strip()
+    if not text:
+        return "NV"
+
+    normalized = text.casefold().replace("é", "e").replace("è", "e").replace("ê", "e")
+
+    if normalized in ("nv", "nm", "non vintage", "non millesime", "non-millesime"):
+        return "NV"
+
+    return text
 
 
 def _sha256_file(path: Path) -> str:
