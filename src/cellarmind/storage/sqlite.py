@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS wine (
     id INTEGER PRIMARY KEY,
     producer TEXT NOT NULL,
     cuvee TEXT NOT NULL,
-    vintage INTEGER NOT NULL,
+    vintage TEXT NOT NULL,
     appellation TEXT NOT NULL,
     color TEXT NOT NULL,
     country TEXT,

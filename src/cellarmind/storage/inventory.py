@@ -11,7 +11,7 @@ class BottleListItem:
     bottle_id: int
     producer: str
     cuvee: str
-    vintage: int
+    vintage: str
     appellation: str
     color: str
     format: str
@@ -65,7 +65,7 @@ def list_bottles(database_path: Path, limit: int = 50) -> tuple[BottleListItem, 
             bottle_id=int(row["bottle_id"]),
             producer=str(row["producer"]),
             cuvee=str(row["cuvee"]),
-            vintage=int(row["vintage"]),
+            vintage=str(row["vintage"]),
             appellation=str(row["appellation"]),
             color=str(row["color"]),
             format=str(row["format"]),
