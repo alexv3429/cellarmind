@@ -110,8 +110,8 @@ def canonicalize_quantity(value: object | None) -> int:
 
     quantity = int(quantity_float)
 
-    if quantity < 1:
-        raise ValueError(f"Quantity must be greater than or equal to 1: {value!r}")
+    if quantity < 0:
+        raise ValueError(f"Quantity must be a positive integer: {value!r}")
 
     return quantity
 

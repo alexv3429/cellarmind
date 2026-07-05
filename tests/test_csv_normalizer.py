@@ -154,13 +154,28 @@ def test_normalize_csv_rejects_invalid_quantity(tmp_path: Path) -> None:
 
     input_path.write_text(
         "Producteur,Cuvée,Millésime,Appellation,Couleur,Quantité\n"
-        "Domaine Test,Cuvée Test,2020,Test Appellation,Rouge,0\n",
+        "Domaine Test,Cuvée Test,2020,Test Appellation,Rouge,-1\n",
         encoding="utf-8",
     )
 
     try:
         normalize_csv_to_canonical(input_path)
     except ValueError as exc:
-        assert "Quantity must be greater than or equal to 1" in str(exc)
+        assert "Quantity must be a positive integer: '-1'" in str(exc)
     else:
         raise AssertionError("Expected ValueError")
+
+
+def test_normalize_allows_zero_quantity(tmp_path: Path) -> None:
+    input_path = tmp_path / "cave.csv"
+    output_path = tmp_path / "canonical.csv"
+
+    input_path.write_text(
+        "Producteur,Cuvée,Année prod,Appellation,Vignoble couleur,Nb,Fmt\n"
+        "Maison Test,Brut Réserve,2018,Champagne,Blanc,0,75\n",
+        encoding="utf-8",
+    )
+
+    normalize_csv_to_canonical(input_path, output_path)
+
+    assert ",0," in output_path.read_text(encoding="utf-8")
