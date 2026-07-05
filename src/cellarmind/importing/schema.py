@@ -74,12 +74,14 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
         "casier",
     ),
     "purchase_price": (
+        "purchase_price",
         "price",
         "prix",
         "purchase price",
         "prix d'achat",
     ),
     "personal_drink_from_year": (
+        "personal_drink_from_year",
         "drink from",
         "from",
         "min",
@@ -90,6 +92,7 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
         "annee minimum",
     ),
     "personal_drink_until_year": (
+        "personal_drink_until_year",
         "drink until",
         "until",
         "max",

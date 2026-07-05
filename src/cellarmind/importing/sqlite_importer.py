@@ -184,8 +184,8 @@ def _get_or_create_wine_variant(
     connection.execute(
         """
         UPDATE wine_variant
-        SET personal_drink_from_year = COALESCE(?, personal_drink_from_year),
-            personal_drink_until_year = COALESCE(?, personal_drink_until_year)
+        SET personal_drink_from_year = COALESCE(personal_drink_from_year, ?),
+            personal_drink_until_year = COALESCE(personal_drink_until_year, ?)
         WHERE wine_id = ?
           AND format = ?
         """,
