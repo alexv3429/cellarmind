@@ -44,5 +44,8 @@ uv run cellarmind db stats --path "$DATABASE_PATH"
 echo "==> Listing bottles"
 uv run cellarmind list bottles --database "$DATABASE_PATH" --limit 10
 
+echo "==> Auditing database"
+uv run cellarmind db audit --path "$DATABASE_PATH"
+
 echo
 echo "Pre-merge checks passed."

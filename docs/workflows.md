@@ -79,3 +79,10 @@ Move bottle
 ↓
 
 Create / update bottle location
+
+## Audit an imported cellar
+
+After importing a cellar CSV into SQLite, CellarMind can produce an audit summary.
+
+```bash
+uv run cellarmind db audit --path data/cellarmind.sqlite

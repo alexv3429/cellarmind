@@ -139,6 +139,8 @@ Suggested fields:
 id
 wine_id
 format
+personal_drink_from_year
+personal_drink_until_year
 created_at
 updated_at
 ```
@@ -187,6 +189,19 @@ CellarMind does not store `volume_ml` separately in v0.1.
 This keeps the model simple while still supporting explicit formats such as `500ml`.
 
 A future schema version may introduce richer format metadata if regional or non-standard bottle names become important.
+
+### Personal drinking window
+
+`wine_variant.personal_drink_from_year` and
+`wine_variant.personal_drink_until_year` store the user's own drinking-window
+estimate for a wine variant.
+
+These values come from imported cellar data, for example `Année min` and
+`Année Max`.
+
+They are intentionally separate from future external enrichment data. Later,
+CellarMind may add provider-based drinking windows with confidence scores and
+evidence.
 
 ### Uniqueness
 
@@ -255,6 +270,15 @@ This is important because each physical bottle may later have:
 - a different opening date;
 - a different tasting note;
 - a different status.
+
+### Purchase price
+
+`bottle.purchase_price` stores the imported purchase price per physical bottle.
+
+If a CSV row has `Nb = 3` and `Prix = 42`, CellarMind creates three `Bottle`
+rows and each bottle receives `purchase_price = 42`.
+
+The field is nullable because purchase price may be unknown.
 
 ## ImportSession
 
@@ -607,6 +631,14 @@ This creates three physical bottles:
 2 bottles in Home cellar / Rack A
 1 bottle in External storage / Case 12
 ```
+
+### Zero quantity rows
+
+A CSV row with `Nb = 0` is accepted but creates no physical `Bottle` rows.
+
+This represents a historical or already-consumed/opened entry in the source CSV.
+CellarMind keeps the import valid but does not create inventory for bottles that
+are no longer present.
 
 ## Deletion and history
 
