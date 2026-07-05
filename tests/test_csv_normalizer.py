@@ -31,6 +31,9 @@ def test_normalize_csv_to_canonical_accepts_french_aliases(tmp_path: Path) -> No
         "quantity",
         "cellar",
         "location",
+        "purchase_price",
+        "personal_drink_from_year",
+        "personal_drink_until_year",
     )
 
     df = pl.read_csv(output_path, infer_schema_length=0)
@@ -45,6 +48,9 @@ def test_normalize_csv_to_canonical_accepts_french_aliases(tmp_path: Path) -> No
         "quantity",
         "cellar",
         "location",
+        "purchase_price",
+        "personal_drink_from_year",
+        "personal_drink_until_year",
     ]
     assert df.row(0) == (
         "Domaine Test",
@@ -54,6 +60,9 @@ def test_normalize_csv_to_canonical_accepts_french_aliases(tmp_path: Path) -> No
         "Rouge",
         "750ml",
         "1",
+        "",
+        "",
+        "",
         "",
         "",
     )
@@ -104,6 +113,39 @@ def test_normalize_csv_to_canonical_accepts_stock_fields(tmp_path: Path) -> None
         "2",
         "Cave maison",
         "Casier A",
+        "",
+        "",
+        "",
+    )
+
+
+def test_normalize_csv_to_canonical_accepts_personal_fields(tmp_path: Path) -> None:
+    input_path = tmp_path / "cave.csv"
+    output_path = tmp_path / "canonical.csv"
+
+    input_path.write_text(
+        "Producteur,Cuvée,Millésime,Appellation,Couleur,Format,Quantité,Cave,Place,Prix,Min,Max\n"
+        "Domaine Test,Cuvée Test,2020,Test Appellation,Rouge,50cl,2,House,Casier A,10,2020,2025\n",
+        encoding="utf-8",
+    )
+
+    normalize_csv_to_canonical(input_path, output_path)
+
+    df = pl.read_csv(output_path, infer_schema_length=0)
+
+    assert df.row(0) == (
+        "Domaine Test",
+        "Cuvée Test",
+        "2020",
+        "Test Appellation",
+        "Rouge",
+        "500ml",
+        "2",
+        "House",
+        "Casier A",
+        "10",
+        "2020",
+        "2025",
     )
 
 

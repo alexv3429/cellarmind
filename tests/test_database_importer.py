@@ -289,3 +289,94 @@ def test_import_explicit_cellar_takes_priority_over_location_mapping(
 
     assert row["cellar_name"] == "Explicit cellar"
     assert row["location_name"] == "G1A"
+
+
+def test_import_purchase_price_per_bottle(tmp_path: Path) -> None:
+    input_path = tmp_path / "cave.csv"
+    database_path = tmp_path / "cellarmind.sqlite"
+
+    input_path.write_text(
+        "Place,Année prod,Cuvée,Appellation,Vignoble couleur,Producteur,Prix,Nb,Fmt\n"
+        "A1,2018,Brut Réserve,Champagne,Blanc,Maison Test,42.5,2,75\n",
+        encoding="utf-8",
+    )
+
+    result = import_csv_to_database(input_path, database_path)
+
+    assert result.source_rows == 1
+    assert result.created_bottles == 2
+
+    with connect_database(database_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT purchase_price
+            FROM bottle
+            ORDER BY id
+            """
+        ).fetchall()
+
+    assert [row["purchase_price"] for row in rows] == [42.5, 42.5]
+
+
+def test_import_personal_drink_window(tmp_path: Path) -> None:
+    input_path = tmp_path / "cave.csv"
+    database_path = tmp_path / "cellarmind.sqlite"
+
+    input_path.write_text(
+        "Place,Année prod,Cuvée,Appellation,Vignoble couleur,Producteur,"
+        "Année min,Année Max,Nb,Fmt\n"
+        "A1,2018,Brut Réserve,Champagne,Blanc,Maison Test,2024,2030,1,75\n",
+        encoding="utf-8",
+    )
+
+    result = import_csv_to_database(input_path, database_path)
+
+    assert result.source_rows == 1
+    assert result.created_bottles == 1
+
+    with connect_database(database_path) as connection:
+        row = connection.execute(
+            """
+            SELECT personal_drink_from_year, personal_drink_until_year
+            FROM wine_variant
+            """
+        ).fetchone()
+
+    assert row["personal_drink_from_year"] == 2024
+    assert row["personal_drink_until_year"] == 2030
+
+
+def test_import_empty_personal_fields_as_null(tmp_path: Path) -> None:
+    input_path = tmp_path / "cave.csv"
+    database_path = tmp_path / "cellarmind.sqlite"
+
+    input_path.write_text(
+        "Place,Année prod,Cuvée,Appellation,Vignoble couleur,Producteur,"
+        "Prix,Année min,Année Max,Nb,Fmt\n"
+        "A1,2018,Brut Réserve,Champagne,Blanc,Maison Test,,,,1,75\n",
+        encoding="utf-8",
+    )
+
+    result = import_csv_to_database(input_path, database_path)
+
+    assert result.source_rows == 1
+    assert result.created_bottles == 1
+
+    with connect_database(database_path) as connection:
+        bottle_row = connection.execute(
+            """
+            SELECT purchase_price
+            FROM bottle
+            """
+        ).fetchone()
+
+        variant_row = connection.execute(
+            """
+            SELECT personal_drink_from_year, personal_drink_until_year
+            FROM wine_variant
+            """
+        ).fetchone()
+
+    assert bottle_row["purchase_price"] is None
+    assert variant_row["personal_drink_from_year"] is None
+    assert variant_row["personal_drink_until_year"] is None
