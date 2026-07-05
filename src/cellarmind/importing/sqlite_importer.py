@@ -7,6 +7,11 @@ from pathlib import Path
 
 import polars as pl
 
+from cellarmind.importing.location_mapping import (
+    LocationMappingRule,
+    load_location_mapping,
+    resolve_cellar_from_location,
+)
 from cellarmind.importing.normalizer import (
     canonicalize_quantity,
     normalize_csv_to_canonical,
@@ -28,7 +33,13 @@ class DatabaseImportResult:
     wine_variants: int
 
 
-def import_csv_to_database(input_path: Path, database_path: Path) -> DatabaseImportResult:
+def import_csv_to_database(
+    input_path: Path, database_path: Path, *, cellar_map_path: Path | None = None
+) -> DatabaseImportResult:
+    rules: list[LocationMappingRule] = []
+    if cellar_map_path is not None:
+        rules = load_location_mapping(cellar_map_path)
+
     initialize_database(database_path)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -54,7 +65,7 @@ def import_csv_to_database(input_path: Path, database_path: Path) -> DatabaseImp
                 touched_wines.add(wine_id)
                 touched_variants.add(variant_id)
 
-                location_id = _get_or_create_import_location(connection, row)
+                location_id = _get_or_create_import_location(connection, row, rules)
                 quantity = canonicalize_quantity(_text(row, "quantity"))
 
                 for _ in range(quantity):
@@ -101,6 +112,23 @@ def _create_import_session(connection, input_path: Path, row_count: int) -> int:
         (str(input_path), _sha256_file(input_path), row_count),
     )
     return int(cursor.lastrowid)
+
+
+def _resolve_cellar_name(
+    row: dict[str, str],
+    location_mapping_rules: list[LocationMappingRule],
+) -> str:
+    explicit_cellar_name = _text(row, "cellar")
+
+    if explicit_cellar_name:
+        return explicit_cellar_name
+
+    location_name = _text(row, "location")
+
+    return resolve_cellar_from_location(
+        location_name,
+        location_mapping_rules,
+    )
 
 
 def _get_or_create_wine(connection, row: dict[str, object]) -> int:
@@ -158,9 +186,11 @@ def _get_or_create_wine_variant(connection, wine_id: int, bottle_format: str) ->
     )
 
 
-def _get_or_create_import_location(connection, row: dict[str, object]) -> int | None:
-    cellar_name = _text(row, "cellar")
+def _get_or_create_import_location(
+    connection, row: dict[str, object], rules: list[LocationMappingRule]
+) -> int | None:
     location_name = _text(row, "location")
+    cellar_name = _resolve_cellar_name(row, rules)
 
     if not cellar_name and not location_name:
         return None

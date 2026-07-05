@@ -28,6 +28,14 @@ OutputPathOption = Annotated[
     Path | None,
     typer.Option("--output", "-o", help="Output path for the canonical CSV."),
 ]
+CellarMapPathOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--cellar-map",
+        "-c",
+        help="Optional path to a CSV file containing cellar mapping rules.",
+    ),
+]
 DatabasePathOption = Annotated[
     Path,
     typer.Option("--path", "-p", help="SQLite database path."),
@@ -161,13 +169,18 @@ def init_database(path: DatabasePathOption = DEFAULT_DATABASE_PATH) -> None:
 def import_cellar(
     path: Path,
     database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+    cellar_map: CellarMapPathOption = None,
 ) -> None:
     """Import a cellar CSV into the SQLite database."""
     if not path.exists():
         raise typer.BadParameter(f"File does not exist: {path}")
 
+    console.print(f"Database: {database}")
+    if cellar_map is not None:
+        console.print(f"Cellar map: {cellar_map}")
+
     try:
-        result = import_csv_to_database(path, database)
+        result = import_csv_to_database(path, database, cellar_map_path=cellar_map)
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
