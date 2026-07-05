@@ -380,3 +380,31 @@ def test_import_empty_personal_fields_as_null(tmp_path: Path) -> None:
     assert bottle_row["purchase_price"] is None
     assert variant_row["personal_drink_from_year"] is None
     assert variant_row["personal_drink_until_year"] is None
+
+
+def test_import_zero_quantity_creates_no_bottles(tmp_path: Path) -> None:
+    input_path = tmp_path / "cave.csv"
+    database_path = tmp_path / "cellarmind.sqlite"
+
+    input_path.write_text(
+        "Place,Année prod,Cuvée,Appellation,Vignoble couleur,Producteur,Nb,Fmt\n"
+        "A1,2018,Brut Réserve,Champagne,Blanc,Maison Test,0,75\n",
+        encoding="utf-8",
+    )
+
+    result = import_csv_to_database(input_path, database_path)
+
+    assert result.source_rows == 1
+    assert result.created_bottles == 0
+
+    with connect_database(database_path) as connection:
+        bottle_count = connection.execute("SELECT COUNT(*) AS count FROM bottle").fetchone()[
+            "count"
+        ]
+
+        location_history_count = connection.execute(
+            "SELECT COUNT(*) AS count FROM bottle_location_history"
+        ).fetchone()["count"]
+
+    assert bottle_count == 0
+    assert location_history_count == 0
