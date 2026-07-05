@@ -156,3 +156,136 @@ def test_import_csv_canonicalizes_non_vintage_aliases_to_nv(tmp_path: Path) -> N
         ("Brut Réserve", "NV"),
         ("Extra Brut", "NV"),
     ]
+
+
+def test_import_uses_default_cellar_without_mapping(tmp_path: Path) -> None:
+    input_path = tmp_path / "cave.csv"
+    database_path = tmp_path / "cellarmind.sqlite"
+
+    input_path.write_text(
+        "Place,Année prod,Cuvée,Appellation,Vignoble couleur,Producteur,Nb,Fmt\n"
+        "A1,2018,Brut Réserve,Champagne,Blanc,Maison Test,2,75\n",
+        encoding="utf-8",
+    )
+
+    result = import_csv_to_database(input_path, database_path)
+
+    assert result.source_rows == 1
+    assert result.created_bottles == 2
+
+    with connect_database(database_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT cellar.name AS cellar_name, location.name AS location_name
+            FROM bottle_location_history
+            JOIN location ON location.id = bottle_location_history.location_id
+            JOIN cellar ON cellar.id = location.cellar_id
+            ORDER BY bottle_location_history.bottle_id
+            """
+        ).fetchall()
+
+    assert [(row["cellar_name"], row["location_name"]) for row in rows] == [
+        ("default", "A1"),
+        ("default", "A1"),
+    ]
+
+
+def test_import_maps_cellar_from_location_mapping_file(tmp_path: Path) -> None:
+    input_path = tmp_path / "cave.csv"
+    database_path = tmp_path / "cellarmind.sqlite"
+    cellar_map_path = tmp_path / "cellar-map.csv"
+
+    input_path.write_text(
+        "Place,Année prod,Cuvée,Appellation,Vignoble couleur,Producteur,Nb,Fmt\n"
+        "G1A,2018,Brut Réserve,Champagne,Blanc,Maison Test,1,150\n",
+        encoding="utf-8",
+    )
+
+    cellar_map_path.write_text(
+        "pattern,cellar\n^G[0-9][A-Z]+$,Large cellar\n",
+        encoding="utf-8",
+    )
+
+    result = import_csv_to_database(
+        input_path,
+        database_path,
+        cellar_map_path=cellar_map_path,
+    )
+
+    assert result.source_rows == 1
+    assert result.created_bottles == 1
+
+    with connect_database(database_path) as connection:
+        row = connection.execute(
+            """
+            SELECT cellar.name AS cellar_name, location.name AS location_name
+            FROM bottle_location_history
+            JOIN location ON location.id = bottle_location_history.location_id
+            JOIN cellar ON cellar.id = location.cellar_id
+            """
+        ).fetchone()
+
+    assert row["cellar_name"] == "Large cellar"
+    assert row["location_name"] == "G1A"
+
+
+def test_import_without_cellar_or_location_does_not_create_location_history(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "cave.csv"
+    database_path = tmp_path / "cellarmind.sqlite"
+
+    input_path.write_text(
+        "Année prod,Cuvée,Appellation,Vignoble couleur,Producteur,Nb,Fmt\n"
+        "2018,Brut Réserve,Champagne,Blanc,Maison Test,1,75\n",
+        encoding="utf-8",
+    )
+
+    result = import_csv_to_database(input_path, database_path)
+
+    assert result.created_bottles == 1
+
+    with connect_database(database_path) as connection:
+        count = connection.execute(
+            "SELECT COUNT(*) AS count FROM bottle_location_history"
+        ).fetchone()["count"]
+
+    assert count == 0
+
+
+def test_import_explicit_cellar_takes_priority_over_location_mapping(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "cave.csv"
+    database_path = tmp_path / "cellarmind.sqlite"
+    cellar_map_path = tmp_path / "cellar-map.csv"
+
+    input_path.write_text(
+        "Cave,Place,Année prod,Cuvée,Appellation,Vignoble couleur,Producteur,Nb,Fmt\n"
+        "Explicit cellar,G1A,2018,Brut Réserve,Champagne,Blanc,Maison Test,1,150\n",
+        encoding="utf-8",
+    )
+
+    cellar_map_path.write_text(
+        "pattern,cellar\n^G[0-9][A-Z]+$,Mapped cellar\n",
+        encoding="utf-8",
+    )
+
+    import_csv_to_database(
+        input_path,
+        database_path,
+        cellar_map_path=cellar_map_path,
+    )
+
+    with connect_database(database_path) as connection:
+        row = connection.execute(
+            """
+            SELECT cellar.name AS cellar_name, location.name AS location_name
+            FROM bottle_location_history
+            JOIN location ON location.id = bottle_location_history.location_id
+            JOIN cellar ON cellar.id = location.cellar_id
+            """
+        ).fetchone()
+
+    assert row["cellar_name"] == "Explicit cellar"
+    assert row["location_name"] == "G1A"

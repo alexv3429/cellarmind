@@ -7,6 +7,11 @@ from pathlib import Path
 
 import polars as pl
 
+from cellarmind.importing.location_mapping import (
+    LocationMappingRule,
+    load_location_mapping,
+    resolve_cellar_from_location,
+)
 from cellarmind.importing.normalizer import (
     canonicalize_quantity,
     normalize_csv_to_canonical,
@@ -28,7 +33,13 @@ class DatabaseImportResult:
     wine_variants: int
 
 
-def import_csv_to_database(input_path: Path, database_path: Path) -> DatabaseImportResult:
+def import_csv_to_database(
+    input_path: Path, database_path: Path, *, cellar_map_path: Path | None = None
+) -> DatabaseImportResult:
+    rules: list[LocationMappingRule] = []
+    if cellar_map_path is not None:
+        rules = load_location_mapping(cellar_map_path)
+
     initialize_database(database_path)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -54,7 +65,7 @@ def import_csv_to_database(input_path: Path, database_path: Path) -> DatabaseImp
                 touched_wines.add(wine_id)
                 touched_variants.add(variant_id)
 
-                location_id = _get_or_create_import_location(connection, row)
+                location_id = _get_or_create_import_location(connection, row, rules)
                 quantity = canonicalize_quantity(_text(row, "quantity"))
 
                 for _ in range(quantity):
@@ -158,18 +169,16 @@ def _get_or_create_wine_variant(connection, wine_id: int, bottle_format: str) ->
     )
 
 
-def _get_or_create_import_location(connection, row: dict[str, object]) -> int | None:
-    cellar_name = _text(row, "cellar")
+def _get_or_create_import_location(
+    connection, row: dict[str, object], rules: list[LocationMappingRule]
+) -> int | None:
     location_name = _text(row, "location")
+    explicit_cellar_name = _text(row, "cellar")
 
-    if not cellar_name and not location_name:
+    if not explicit_cellar_name and not location_name:
         return None
 
-    if not cellar_name:
-        cellar_name = DEFAULT_CELLAR_NAME
-
-    if not location_name:
-        location_name = DEFAULT_LOCATION_NAME
+    cellar_name = explicit_cellar_name or resolve_cellar_from_location(location_name, rules)
 
     cellar_id = _get_or_create_cellar(connection, cellar_name)
     return _get_or_create_location(connection, cellar_id, location_name)
