@@ -229,6 +229,30 @@ def test_import_maps_cellar_from_location_mapping_file(tmp_path: Path) -> None:
     assert row["location_name"] == "G1A"
 
 
+def test_import_without_cellar_or_location_does_not_create_location_history(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "cave.csv"
+    database_path = tmp_path / "cellarmind.sqlite"
+
+    input_path.write_text(
+        "Année prod,Cuvée,Appellation,Vignoble couleur,Producteur,Nb,Fmt\n"
+        "2018,Brut Réserve,Champagne,Blanc,Maison Test,1,75\n",
+        encoding="utf-8",
+    )
+
+    result = import_csv_to_database(input_path, database_path)
+
+    assert result.created_bottles == 1
+
+    with connect_database(database_path) as connection:
+        count = connection.execute(
+            "SELECT COUNT(*) AS count FROM bottle_location_history"
+        ).fetchone()["count"]
+
+    assert count == 0
+
+
 def test_import_explicit_cellar_takes_priority_over_location_mapping(
     tmp_path: Path,
 ) -> None:

@@ -114,23 +114,6 @@ def _create_import_session(connection, input_path: Path, row_count: int) -> int:
     return int(cursor.lastrowid)
 
 
-def _resolve_cellar_name(
-    row: dict[str, str],
-    location_mapping_rules: list[LocationMappingRule],
-) -> str:
-    explicit_cellar_name = _text(row, "cellar")
-
-    if explicit_cellar_name:
-        return explicit_cellar_name
-
-    location_name = _text(row, "location")
-
-    return resolve_cellar_from_location(
-        location_name,
-        location_mapping_rules,
-    )
-
-
 def _get_or_create_wine(connection, row: dict[str, object]) -> int:
     values = (
         _text(row, "producer"),
@@ -190,16 +173,12 @@ def _get_or_create_import_location(
     connection, row: dict[str, object], rules: list[LocationMappingRule]
 ) -> int | None:
     location_name = _text(row, "location")
-    cellar_name = _resolve_cellar_name(row, rules)
+    explicit_cellar_name = _text(row, "cellar")
 
-    if not cellar_name and not location_name:
+    if not explicit_cellar_name and not location_name:
         return None
 
-    if not cellar_name:
-        cellar_name = DEFAULT_CELLAR_NAME
-
-    if not location_name:
-        location_name = DEFAULT_LOCATION_NAME
+    cellar_name = explicit_cellar_name or resolve_cellar_from_location(location_name, rules)
 
     cellar_id = _get_or_create_cellar(connection, cellar_name)
     return _get_or_create_location(connection, cellar_id, location_name)
