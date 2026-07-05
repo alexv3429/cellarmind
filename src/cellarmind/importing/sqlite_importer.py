@@ -60,7 +60,20 @@ def import_csv_to_database(
 
             for row in df.iter_rows(named=True):
                 wine_id = _get_or_create_wine(connection, row)
-                variant_id = _get_or_create_wine_variant(connection, wine_id, _text(row, "format"))
+                personal_drink_from_year = _parse_optional_year(
+                    _text(row, "personal_drink_from_year")
+                )
+                personal_drink_until_year = _parse_optional_year(
+                    _text(row, "personal_drink_until_year")
+                )
+                purchase_price = _parse_optional_price(_text(row, "purchase_price"))
+                variant_id = _get_or_create_wine_variant(
+                    connection,
+                    wine_id,
+                    _text(row, "format"),
+                    personal_drink_from_year=personal_drink_from_year,
+                    personal_drink_until_year=personal_drink_until_year,
+                )
 
                 touched_wines.add(wine_id)
                 touched_variants.add(variant_id)
@@ -73,6 +86,7 @@ def import_csv_to_database(
                         connection=connection,
                         wine_variant_id=variant_id,
                         import_session_id=import_session_id,
+                        purchase_price=purchase_price,
                     )
                     created_bottles += 1
 
@@ -147,13 +161,35 @@ def _get_or_create_wine(connection, row: dict[str, object]) -> int:
     )
 
 
-def _get_or_create_wine_variant(connection, wine_id: int, bottle_format: str) -> int:
+def _get_or_create_wine_variant(
+    connection,
+    wine_id: int,
+    bottle_format: str,
+    personal_drink_from_year: int | None = None,
+    personal_drink_until_year: int | None = None,
+) -> int:
     connection.execute(
         """
-        INSERT OR IGNORE INTO wine_variant (wine_id, format)
-        VALUES (?, ?)
+        INSERT OR IGNORE INTO wine_variant (
+            wine_id,
+            format,
+            personal_drink_from_year,
+            personal_drink_until_year
+        )
+        VALUES (?, ?, ?, ?)
         """,
-        (wine_id, bottle_format),
+        (wine_id, bottle_format, personal_drink_from_year, personal_drink_until_year),
+    )
+
+    connection.execute(
+        """
+        UPDATE wine_variant
+        SET personal_drink_from_year = COALESCE(?, personal_drink_from_year),
+            personal_drink_until_year = COALESCE(?, personal_drink_until_year)
+        WHERE wine_id = ?
+          AND format = ?
+        """,
+        (personal_drink_from_year, personal_drink_until_year, wine_id, bottle_format),
     )
 
     return int(
@@ -228,13 +264,18 @@ def _get_or_create_location(connection, cellar_id: int, name: str) -> int:
     )
 
 
-def _create_bottle(connection, wine_variant_id: int, import_session_id: int) -> int:
+def _create_bottle(
+    connection,
+    wine_variant_id: int,
+    import_session_id: int,
+    purchase_price: float | None = None,
+) -> int:
     cursor = connection.execute(
         """
-        INSERT INTO bottle (wine_variant_id, import_session_id)
-        VALUES (?, ?)
+        INSERT INTO bottle (wine_variant_id, import_session_id, purchase_price)
+        VALUES (?, ?, ?)
         """,
-        (wine_variant_id, import_session_id),
+        (wine_variant_id, import_session_id, purchase_price),
     )
     return int(cursor.lastrowid)
 
@@ -247,6 +288,28 @@ def _create_initial_location_history(connection, bottle_id: int, location_id: in
         """,
         (bottle_id, location_id),
     )
+
+
+def _parse_optional_price(value: str) -> float | None:
+    text = value.strip()
+
+    if not text:
+        return None
+
+    normalized = (
+        text.replace("€", "").replace(" ", "").replace("\u202f", "").replace(",", ".").strip()
+    )
+
+    return float(normalized)
+
+
+def _parse_optional_year(value: str) -> int | None:
+    text = value.strip()
+
+    if not text:
+        return None
+
+    return int(text)
 
 
 def _text(row: dict[str, object], field: str) -> str:
