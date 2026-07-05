@@ -20,6 +20,9 @@ OPTIONAL_FIELDS: tuple[str, ...] = (
     "quantity",
     "cellar",
     "location",
+    "purchase_price",
+    "personal_drink_from_year",
+    "personal_drink_until_year",
 )
 
 CANONICAL_FIELDS: tuple[str, ...] = REQUIRED_FIELDS + OPTIONAL_FIELDS
@@ -69,6 +72,32 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
         "emplacement",
         "place",
         "casier",
+    ),
+    "purchase_price": (
+        "price",
+        "prix",
+        "purchase price",
+        "prix d'achat",
+    ),
+    "personal_drink_from_year": (
+        "drink from",
+        "from",
+        "min",
+        "minimum",
+        "année min",
+        "annee min",
+        "année minimum",
+        "annee minimum",
+    ),
+    "personal_drink_until_year": (
+        "drink until",
+        "until",
+        "max",
+        "maximum",
+        "année max",
+        "annee max",
+        "année maximum",
+        "annee maximum",
     ),
 }
 

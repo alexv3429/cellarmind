@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS wine_variant (
     id INTEGER PRIMARY KEY,
     wine_id INTEGER NOT NULL,
     format TEXT NOT NULL DEFAULT '750ml',
+    personal_drink_from_year INTEGER,
+    personal_drink_until_year INTEGER,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (wine_id, format),
