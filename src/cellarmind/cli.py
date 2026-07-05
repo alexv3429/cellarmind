@@ -9,6 +9,7 @@ from cellarmind.importing.normalizer import normalize_csv_to_canonical
 from cellarmind.importing.schema import validate_csv_schema
 from cellarmind.importing.sqlite_importer import import_csv_to_database
 from cellarmind.infrastructure.csv_inspector import inspect_csv
+from cellarmind.storage.audit import AuditBreakdownRow, audit_database
 from cellarmind.storage.inventory import list_bottles
 from cellarmind.storage.sqlite import initialize_database
 from cellarmind.storage.stats import get_database_stats
@@ -226,6 +227,25 @@ def database_stats(path: Path = DEFAULT_DATABASE_PATH) -> None:
         console.print(table)
 
 
+@db_app.command("audit")
+def audit_cellar_database(
+    path: DatabasePathOption = DEFAULT_DATABASE_PATH,
+) -> None:
+    """Audit imported cellar data."""
+    try:
+        report = audit_database(path)
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {path}")
+
+    _print_audit_summary(report)
+    _print_audit_breakdown("Bottles by cellar", report.bottles_by_cellar)
+    _print_audit_breakdown("Bottles by format", report.bottles_by_format)
+    _print_audit_breakdown("Top producers", report.top_producers)
+    _print_audit_breakdown("Top appellations", report.top_appellations)
+
+
 @list_app.command("bottles")
 def list_bottle_inventory(
     database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
@@ -269,5 +289,46 @@ def list_bottle_inventory(
             bottle.cellar or "",
             bottle.location or "",
         )
+
+    console.print(table)
+
+
+def _print_audit_summary(report) -> None:
+    summary = report.summary
+
+    table = Table(title="Cellar audit", expand=False)
+    table.add_column("Metric", no_wrap=True)
+    table.add_column("Value", justify="right", no_wrap=True)
+
+    table.add_row("Total bottles", str(summary.bottles))
+    table.add_row("Wines", str(summary.wines))
+    table.add_row("Wine variants", str(summary.wine_variants))
+    table.add_row("Bottles with purchase price", str(summary.bottles_with_price))
+    table.add_row("Bottles without purchase price", str(summary.bottles_without_price))
+    table.add_row("Total purchase value", f"{summary.total_purchase_value:.2f}")
+    table.add_row(
+        "Variants with personal drink window",
+        str(summary.variants_with_personal_drink_window),
+    )
+    table.add_row(
+        "Variants without personal drink window",
+        str(summary.variants_without_personal_drink_window),
+    )
+    table.add_row("Non-vintage wines", str(summary.non_vintage_wines))
+    table.add_row("Bottles without location", str(summary.bottles_without_location))
+
+    console.print(table)
+
+
+def _print_audit_breakdown(
+    title: str,
+    rows: tuple[AuditBreakdownRow, ...],
+) -> None:
+    table = Table(title=title, expand=False)
+    table.add_column("Label", no_wrap=True)
+    table.add_column("Bottles", justify="right", no_wrap=True)
+
+    for row in rows:
+        table.add_row(row.label, str(row.bottle_count))
 
     console.print(table)
