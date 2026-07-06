@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote_plus, urlparse
 from urllib.request import Request, urlopen
 
@@ -198,27 +199,41 @@ def _fetch_search_html(
         },
     )
 
-    with urlopen(request, timeout=timeout_seconds) as response:
-        charset = response.headers.get_content_charset() or "utf-8"
-        return response.read(1_000_000).decode(charset, errors="replace")
+    try:
+        with urlopen(request, timeout=timeout_seconds) as response:
+            charset = response.headers.get_content_charset() or "utf-8"
+            return response.read(1_000_000).decode(charset, errors="replace")
+    except HTTPError as error:
+        raise ValueError(f"Could not search online sources: HTTP {error.code}") from error
+    except URLError as error:
+        raise ValueError(f"Could not search online sources: {error.reason}") from error
+    except TimeoutError as error:
+        raise ValueError("Could not search online sources: request timed out.") from error
 
 
 def _normalize_result_url(url: str) -> str | None:
     if not url:
         return None
 
+    if url.startswith("/l/"):
+        return _normalize_result_url(f"https://duckduckgo.com{url}")
+
+    if url.startswith("//duckduckgo.com/l/"):
+        return _normalize_result_url(f"https:{url}")
+
     parsed = urlparse(url)
 
     if parsed.netloc.endswith("duckduckgo.com") and parsed.path.startswith("/l/"):
         params = parse_qs(parsed.query)
         target = params.get("uddg", [None])[0]
-        return target
+
+        if target:
+            return target
+
+        return None
 
     if parsed.scheme in {"http", "https"} and parsed.netloc:
         return url
-
-    if url.startswith("//duckduckgo.com/l/"):
-        return _normalize_result_url(f"https:{url}")
 
     return None
 

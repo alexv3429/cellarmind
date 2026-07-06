@@ -192,3 +192,37 @@ def _get_wine_id(database_path: Path) -> int:
     assert row is not None
 
     return int(row["id"])
+
+
+def test_reference_window_search_normalizes_duckduckgo_relative_result(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    database_path = _create_database_with_wine(tmp_path)
+    wine_id = _get_wine_id(database_path)
+
+    def fake_fetch_search_html(url: str, *, timeout_seconds: float) -> str:
+        return """
+        <html>
+          <body>
+            <a class="result__a"
+               href="/l/?kh=-1&uddg=https%3A%2F%2Fexample.com%2Fwine">
+              Example Wine Page
+            </a>
+          </body>
+        </html>
+        """
+
+    monkeypatch.setattr(
+        "cellarmind.storage.reference_window_search._fetch_search_html",
+        fake_fetch_search_html,
+    )
+
+    report = search_reference_window_sources(
+        database_path,
+        wine_id=wine_id,
+        limit=5,
+    )
+
+    assert len(report.results) == 1
+    assert report.results[0].url == "https://example.com/wine"
