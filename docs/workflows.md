@@ -187,3 +187,25 @@ uv run cellarmind report placement \
 ```
 
 The report is read-only. It does not move bottles automatically.
+
+## Plan cellar transfers
+
+After running the placement report, CellarMind can turn placement issues into a
+dry-run transfer plan.
+
+```bash
+uv run cellarmind plan transfers \
+  --database data/cellarmind.sqlite \
+  --year 2026 \
+  --limit 30
+```
+
+The plan is advisory. It suggests target cellars when possible, but it does not
+assign exact physical slots and does not apply moves.
+
+Typical suggestions include:
+
+- moving too-young bottles from `drink_soon` cellars to `aging` cellars;
+- moving ready or overdue bottles from `aging` cellars to `drink_soon` cellars;
+- reviewing bottles in `staging` or `overflow` cellars;
+- reviewing bottles without an active location.

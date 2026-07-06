@@ -61,5 +61,8 @@ uv run cellarmind db audit --path "$DATABASE_PATH"
 echo "==> Placement report"
 uv run cellarmind report placement --database "$DATABASE_PATH" --year 2026 --limit 10
 
+echo "==> Transfer plan"
+uv run cellarmind plan transfers --database "$DATABASE_PATH" --year 2026 --limit 10
+
 echo
 echo "Pre-merge checks passed."

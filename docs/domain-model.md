@@ -30,7 +30,7 @@ Each variant has its own:
 
 A Bottle represents one physical bottle.
 
-Several bottles may refer to the same WineVariant.
+Several bottles may refer to the same Wine.
 
 Each bottle has its own:
 
