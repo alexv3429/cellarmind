@@ -118,3 +118,15 @@ After importing a cellar CSV into SQLite, CellarMind can produce an audit summar
 ```bash
 uv run cellarmind db audit --path data/cellarmind.sqlite
 ```
+
+## Configure cellar profiles
+
+CellarMind can  store the intended role and approximate capacity of each cellar.
+
+```bash
+uv run cellarmind cellar update "Main cellar" \
+  --database data/cellarmind.sqlite \
+  --purpose aging \
+  --capacity-estimate 350 \
+  --capacity-warning-threshold 330
+```

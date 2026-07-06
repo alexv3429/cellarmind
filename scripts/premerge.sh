@@ -38,6 +38,17 @@ uv run cellarmind db init --path "$DATABASE_PATH"
 echo "==> Importing sample CSV"
 uv run cellarmind import examples/cave.sample.csv --database "$DATABASE_PATH"
 
+echo "==> Updating sample cellar profile"
+uv run cellarmind cellar update "Example" \
+  --database "$DATABASE_PATH" \
+  --purpose "aging" \
+  --capacity-estimate 100 \
+  --capacity-warning-threshold 90 \
+  --notes "Sample aging cellar"
+
+echo "==> Listing cellars"
+uv run cellarmind cellar list --database "$DATABASE_PATH"
+
 echo "==> Database stats"
 uv run cellarmind db stats --path "$DATABASE_PATH"
 
