@@ -265,6 +265,17 @@ WineVariant.personal_drink_until_year
 Reference windows are intentionally separate. They can later be compared with
 personal windows, but they do not replace them automatically.
 
+### Window comparison
+
+Window comparison uses:
+
+```text
+WineVariant.personal_drink_from_year
+WineVariant.personal_drink_until_year
+ReferenceDrinkingWindow.drink_from_year
+ReferenceDrinkingWindow.drink_until_year
+```
+
 ### Uniqueness
 
 A suggested uniqueness rule is:

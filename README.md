@@ -457,6 +457,16 @@ Reference windows are linked to `Wine`, while personal windows remain on
 Reference windows do not replace personal windows. They are stored as separate
 local evidence for later comparison.
 
+## Compare personal and reference windows
+
+CellarMind can compare personal drinking windows with reference drinking windows.
+
+```bash
+uv run cellarmind report window-comparison \
+  --database data/cellarmind.sqlite \
+  --tolerance-years 2
+```
+
 ## Development
 
 Run the full local check suite:

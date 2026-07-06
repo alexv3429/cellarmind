@@ -277,3 +277,14 @@ uv run cellarmind reference-window add \
 
 Reference windows are local data. This command does not fetch data from the
 internet and does not overwrite personal drinking windows.
+
+## Compare drinking-window evidence
+
+After adding reference drinking windows, compare them with personal windows:
+
+```bash
+uv run cellarmind report window-comparison \
+  --database data/cellarmind.sqlite \
+  --tolerance-years 2 \
+  --limit 50
+```

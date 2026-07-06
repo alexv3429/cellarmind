@@ -29,6 +29,10 @@ from cellarmind.storage.reference_windows import (
 from cellarmind.storage.sqlite import initialize_database
 from cellarmind.storage.stats import get_database_stats
 from cellarmind.storage.transfer_plan import TransferSuggestion, plan_transfers
+from cellarmind.storage.window_comparison import (
+    WindowComparisonRow,
+    compare_drinking_windows,
+)
 
 DEFAULT_DATABASE_PATH = Path("data/cellarmind.sqlite")
 LimitOption = Annotated[
@@ -254,6 +258,16 @@ ReferenceNotesOption = Annotated[
     typer.Option(
         "--notes",
         help="Optional notes about the reference.",
+    ),
+]
+
+ComparisonToleranceYearsOption = Annotated[
+    int,
+    typer.Option(
+        "--tolerance-years",
+        "-t",
+        min=0,
+        help="Allowed year difference before reporting a large disagreement.",
     ),
 ]
 
@@ -768,6 +782,30 @@ def report_drinking_window(
 
     _print_drinking_window_summary(report)
     _print_drinking_window_bottles(report.bottles)
+
+
+@report_app.command("window-comparison")
+def report_window_comparison(
+    database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+    tolerance_years: ComparisonToleranceYearsOption = 2,
+    limit: ReportLimitOption = 50,
+) -> None:
+    """Compare personal and reference drinking windows."""
+    try:
+        report = compare_drinking_windows(
+            database,
+            tolerance_years=tolerance_years,
+            limit=limit,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+
+    _print_window_comparison_summary(report)
+    _print_window_comparisons(report.rows)
 
 
 @plan_app.command("transfers")
@@ -1311,3 +1349,90 @@ def _format_reference_window(window: ReferenceDrinkingWindow) -> str:
     until_year = str(window.drink_until_year) if window.drink_until_year is not None else "?"
 
     return f"{from_year}-{until_year}"
+
+
+def _print_window_comparison_summary(report) -> None:
+    summary = report.summary
+
+    table = Table(
+        title="Window comparison summary",
+        expand=False,
+        width=44,
+    )
+    table.add_column("Metric", no_wrap=True)
+    table.add_column("Value", justify="right", no_wrap=True)
+
+    table.add_row("Active variants", str(summary.active_variants))
+    table.add_row("Aligned", str(summary.aligned))
+    table.add_row("Missing reference", str(summary.missing_reference_windows))
+    table.add_row("Missing personal", str(summary.missing_personal_windows))
+    table.add_row("Missing both", str(summary.missing_personal_and_reference))
+    table.add_row("Personal earlier", str(summary.personal_earlier_than_reference))
+    table.add_row("Personal later", str(summary.personal_later_than_reference))
+    table.add_row("Large disagreements", str(summary.large_disagreements))
+    table.add_row("Partial comparisons", str(summary.partial_comparisons))
+
+    console.print(table)
+
+
+def _print_window_comparisons(
+    rows: tuple[WindowComparisonRow, ...],
+) -> None:
+    if not rows:
+        console.print("No active wine variants found.")
+        return
+
+    table = Table(title="Window comparisons", expand=False)
+    table.add_column("Severity", no_wrap=True)
+    table.add_column("Category", overflow="fold", max_width=32)
+    table.add_column("Wine", overflow="fold", max_width=38)
+    table.add_column("Bottles", justify="right", no_wrap=True)
+    table.add_column("Personal", no_wrap=True)
+    table.add_column("Reference", no_wrap=True)
+    table.add_column("Source", overflow="fold", max_width=28)
+    table.add_column("Note", overflow="fold", max_width=48)
+
+    for row in rows:
+        table.add_row(
+            row.severity,
+            row.category,
+            _format_window_comparison_wine(row),
+            str(row.active_bottle_count),
+            _format_personal_window(row),
+            _format_reference_window_comparison(row),
+            row.reference_source_name or "",
+            row.note,
+        )
+
+    console.print(table)
+
+
+def _format_window_comparison_wine(row: WindowComparisonRow) -> str:
+    return f"{row.producer} — {row.cuvee} {row.vintage} ({row.bottle_format})"
+
+
+def _format_personal_window(row: WindowComparisonRow) -> str:
+    return _format_year_range(
+        row.personal_drink_from_year,
+        row.personal_drink_until_year,
+    )
+
+
+def _format_reference_window_comparison(row: WindowComparisonRow) -> str:
+    return _format_year_range(
+        row.reference_drink_from_year,
+        row.reference_drink_until_year,
+    )
+
+
+def _format_year_range(
+    from_year: int | None,
+    until_year: int | None,
+) -> str:
+    if from_year is None and until_year is None:
+        return ""
+
+    resolved_from = str(from_year) if from_year is not None else "?"
+    resolved_until = str(until_year) if until_year is not None else "?"
+
+    return f"{resolved_from}-{resolved_until}"
