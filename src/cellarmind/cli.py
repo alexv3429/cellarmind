@@ -950,7 +950,7 @@ def fetch_reference_window_command(
     source_url: ReferenceFetchUrlOption,
     database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
     source_name: OptionalReferenceSourceNameOption = None,
-    confidence: ReferenceConfidenceOption = "medium",
+    confidence: ReferenceConfidenceOption = None,
     timeout_seconds: ReferenceFetchTimeoutOption = 15.0,
     save: SaveReferenceWindowOption = False,
 ) -> None:

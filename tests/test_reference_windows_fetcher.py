@@ -226,3 +226,50 @@ def _get_wine_id(database_path: Path, *, cuvee: str) -> int:
     assert row is not None
 
     return int(row["id"])
+
+
+def test_reference_window_fetch_command_save_uses_extracted_confidence(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    database_path = _create_database_with_wine(tmp_path)
+    wine_id = _get_wine_id(database_path, cuvee="Internet Wine")
+
+    def fake_fetch_url_text(
+        source_url: str,
+        *,
+        timeout_seconds: float,
+        max_bytes: int = 2_000_000,
+    ) -> str:
+        return "A boire jusqu'à 2030."
+
+    monkeypatch.setattr(
+        "cellarmind.storage.reference_windows_fetcher.fetch_url_text",
+        fake_fetch_url_text,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "reference-window",
+            "fetch",
+            "--database",
+            str(database_path),
+            "--wine-id",
+            str(wine_id),
+            "--url",
+            "https://example.com/wine",
+            "--source-name",
+            "Example source",
+            "--save",
+        ],
+    )
+
+    assert result.exit_code == 0
+
+    windows = list_reference_windows(database_path, wine_id=wine_id)
+
+    assert len(windows) == 1
+    assert windows[0].drink_from_year is None
+    assert windows[0].drink_until_year == 2030
+    assert windows[0].confidence == "low"
