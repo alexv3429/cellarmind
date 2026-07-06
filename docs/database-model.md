@@ -225,6 +225,26 @@ unknown
 The report is read-only and does not modify bottles, locations, or drinking
 windows.
 
+### Drinking recommendations
+
+Drinking recommendations are computed from existing tables.
+
+They use:
+
+```text
+Bottle.status
+Bottle active location
+Cellar.purpose
+WineVariant.personal_drink_from_year
+WineVariant.personal_drink_until_year
+```
+
+No new table is introduced in this version. Recommendations are computed at read
+time and are not persisted.
+
+The recommendation command does not modify `Bottle`, `BottleLocationHistory`, or
+`WineVariant`.
+
 ### Uniqueness
 
 A suggested uniqueness rule is:

@@ -230,3 +230,31 @@ The command is read-only and reports:
 
 Only active bottles are included. Bottles marked as `consumed`, `gifted`, `sold`,
 or `lost` are excluded.
+
+## Recommend bottles to drink
+
+After importing bottles and personal drinking windows, CellarMind can recommend
+what to drink, hold, or review.
+
+```bash
+uv run cellarmind recommend drinking \
+  --database data/cellarmind.sqlite \
+  --year 2026 \
+  --limit 50
+```
+
+The recommendation command combines:
+
+- active bottle status;
+- personal drinking windows;
+- cellar purpose;
+- current location.
+
+Typical actions are:
+
+- `drink_now` for opened or overdue bottles;
+- `consider_drinking` for bottles that are ready but not urgent;
+- `hold` for bottles that are too young;
+- `review` for bottles with missing location or missing drinking-window data.
+
+The command is advisory and read-only.

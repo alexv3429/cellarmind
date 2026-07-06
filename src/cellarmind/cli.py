@@ -14,6 +14,10 @@ from cellarmind.storage.bottle_addition import add_bottles
 from cellarmind.storage.bottle_movement import move_bottle
 from cellarmind.storage.bottle_status import update_bottle_status
 from cellarmind.storage.cellars import list_cellars, update_cellar_profile
+from cellarmind.storage.drinking_recommendation import (
+    DrinkingRecommendation,
+    recommend_drinking,
+)
 from cellarmind.storage.drinking_window import DrinkingWindowBottle, report_drinking_windows
 from cellarmind.storage.inventory import list_bottles
 from cellarmind.storage.placement import PlacementIssue, audit_placement
@@ -195,6 +199,8 @@ report_app = typer.Typer(help="Generate cellar reports.")
 app.add_typer(report_app, name="report")
 plan_app = typer.Typer(help="Generate cellar transfer plans.")
 app.add_typer(plan_app, name="plan")
+recommend_app = typer.Typer(help="Generate drinking recommendations.")
+app.add_typer(recommend_app, name="recommend")
 console = Console(width=160)
 
 
@@ -712,6 +718,30 @@ def plan_cellar_transfers(
     _print_transfer_suggestions(transfer_plan.suggestions)
 
 
+@recommend_app.command("drinking")
+def recommend_drinking_command(
+    database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+    year: ReportYearOption = None,
+    limit: ReportLimitOption = 50,
+) -> None:
+    """Recommend bottles to drink, hold, or review."""
+    try:
+        report = recommend_drinking(
+            database,
+            as_of_year=year,
+            limit=limit,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+
+    _print_drinking_recommendation_summary(report)
+    _print_drinking_recommendations(report.recommendations)
+
+
 def _print_audit_summary(report) -> None:
     summary = report.summary
 
@@ -1016,3 +1046,106 @@ def _format_drinking_window(bottle: DrinkingWindowBottle) -> str:
     )
 
     return f"{from_year}-{until_year}"
+
+
+def _print_drinking_recommendation_summary(report) -> None:
+    summary = report.summary
+
+    table = Table(
+        title="Drinking recommendations summary",
+        expand=False,
+        width=42,
+    )
+    table.add_column("Metric", no_wrap=True)
+    table.add_column("Value", justify="right", no_wrap=True)
+
+    table.add_row("As of year", str(summary.as_of_year))
+    table.add_row("Active bottles", str(summary.active_bottles))
+    table.add_row("Drink now", str(summary.drink_now_recommendations))
+    table.add_row(
+        "Consider drinking",
+        str(summary.consider_drinking_recommendations),
+    )
+    table.add_row("Hold", str(summary.hold_recommendations))
+    table.add_row("Review", str(summary.review_recommendations))
+
+    console.print(table)
+
+
+def _print_drinking_recommendations(
+    recommendations: tuple[DrinkingRecommendation, ...],
+) -> None:
+    if not recommendations:
+        console.print("No active bottles found.")
+        return
+
+    table = Table(title="Drinking recommendations", expand=False)
+    table.add_column("Priority", no_wrap=True, min_width=8)
+    table.add_column("Action", no_wrap=True, min_width=18)
+    table.add_column("Bottle", justify="right", no_wrap=True)
+    table.add_column("Wine", overflow="fold", max_width=40)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Window", no_wrap=True)
+    table.add_column("Cellar", overflow="fold", max_width=28)
+    table.add_column("Reason", overflow="fold", max_width=56)
+
+    for recommendation in recommendations:
+        table.add_row(
+            recommendation.priority,
+            recommendation.action,
+            str(recommendation.bottle_id),
+            _format_drinking_recommendation_wine(recommendation),
+            recommendation.status,
+            _format_drinking_recommendation_window(recommendation),
+            _format_drinking_recommendation_cellar(recommendation),
+            recommendation.reason,
+        )
+
+    console.print(table)
+
+
+def _format_drinking_recommendation_wine(
+    recommendation: DrinkingRecommendation,
+) -> str:
+    return (
+        f"{recommendation.producer} — {recommendation.cuvee} "
+        f"{recommendation.vintage} ({recommendation.bottle_format})"
+    )
+
+
+def _format_drinking_recommendation_window(
+    recommendation: DrinkingRecommendation,
+) -> str:
+    if (
+        recommendation.personal_drink_from_year is None
+        and recommendation.personal_drink_until_year is None
+    ):
+        return ""
+
+    from_year = (
+        str(recommendation.personal_drink_from_year)
+        if recommendation.personal_drink_from_year is not None
+        else "?"
+    )
+    until_year = (
+        str(recommendation.personal_drink_until_year)
+        if recommendation.personal_drink_until_year is not None
+        else "?"
+    )
+
+    return f"{from_year}-{until_year}"
+
+
+def _format_drinking_recommendation_cellar(
+    recommendation: DrinkingRecommendation,
+) -> str:
+    if recommendation.cellar is None:
+        return ""
+
+    if recommendation.cellar_purpose is None:
+        return recommendation.cellar
+
+    if recommendation.location is None:
+        return f"{recommendation.cellar} ({recommendation.cellar_purpose})"
+
+    return f"{recommendation.cellar} / {recommendation.location} ({recommendation.cellar_purpose})"
