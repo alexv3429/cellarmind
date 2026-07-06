@@ -93,6 +93,24 @@ uv run cellarmind bottle move 123 \
   --location "A12"
 ```
 
+## Update bottle status
+
+CellarMind can update the lifecycle status of a physical bottle.
+
+Mark a bottle as opened:
+
+```⁠bash
+uv run cellarmind bottle mark-opened 123 \
+  --database data/cellarmind.sqlite
+```
+
+Alternatively, a bottle can be marked as out of the cellar using status:
+
+- `mark-consumed`
+- `mark-sold`
+- `mark-gifted`
+- `mark-lost`
+
 ## Audit an imported cellar
 
 After importing a cellar CSV into SQLite, CellarMind can produce an audit summary.
