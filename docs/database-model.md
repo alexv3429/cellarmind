@@ -377,6 +377,31 @@ staging
 overflow
 ```
 
+### Placement auditing
+
+Cellar profiles are used by the placement report.
+
+The report compares:
+
+```text
+Bottle active location
+Bottle status
+Cellar purpose
+Cellar approximate capacity
+WineVariant personal drinking window
+```
+
+This allows CellarMind to detect advisory placement issues such as:
+
+- active bottles without location;
+- bottles in staging or overflow cellars;
+- young bottles in a `drink_soon` cellar;
+- ready or overdue bottles in an `aging` cellar;
+- cellars near or over their approximate capacity.
+
+Capacity remains advisory. The report highlights possible issues but does not
+block imports, moves, or manual additions.
+
 ## Location
 
 A `Location` represents a place inside a cellar.

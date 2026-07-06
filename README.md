@@ -270,6 +270,36 @@ The audit reports:
 
 The audit command does not enrich data from external sources. It only summarizes data already imported into the local SQLite database.
 
+## Placement report
+
+CellarMind can audit whether bottles appear to be in suitable cellars based on
+cellar purpose, approximate capacity, active locations, and personal drinking
+windows.
+
+```bash
+uv run cellarmind report placement \
+  --database data/cellarmind.sqlite
+```
+
+Use a fixed year for reproducible reports:
+
+```bash
+uv run cellarmind report placement \
+  --database data/cellarmind.sqlite \
+  --year 2026
+```
+
+The placement report detects:
+
+- cellars near or over approximate capacity;
+- bottles without active location;
+- bottles in staging or overflow cellars;
+- bottles that look too young for a `drink_soon` cellar;
+- bottles that are ready or overdue but still in an `aging` cellar;
+- bottles with unknown personal drinking windows in a `drink_soon` cellar.
+
+The report is advisory. It does not move bottles automatically.
+
 ## Domain model
 
 CellarMind separates wine identity from physical inventory:
