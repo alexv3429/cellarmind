@@ -80,6 +80,27 @@ Move bottle
 
 Create / update bottle location
 
+## Add bottles manually
+
+CellarMind can add physical bottles without importing a CSV.
+
+```bash
+uv run cellarmind bottle add \
+  --database data/cellarmind.sqlite \
+  --producer "Domaine Test" \
+  --cuvee "Cuvée Test" \
+  --vintage 2020 \
+  --appellation "Bourgogne" \
+  --color Rouge \
+  --format 750ml \
+  --quantity 2 \
+  --cellar "Main cellar" \
+  --location "A12" \
+  --purchase-price 42 \
+  --personal-drink-from-year 2025 \
+  --personal-drink-until-year 2030
+```
+
 ## Move a bottle
 
 CellarMind tracks bottle locations through location history.

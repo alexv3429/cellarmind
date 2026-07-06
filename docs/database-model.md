@@ -280,6 +280,26 @@ rows and each bottle receives `purchase_price = 42`.
 
 The field is nullable because purchase price may be unknown.
 
+### Manual bottle additions
+
+Manual additions create physical `Bottle` rows directly from CLI input.
+
+A manual addition still follows the same model as CSV import:
+
+```text
+Wine
+  -> WineVariant
+      -> Bottle
+```
+
+The command creates or reuses the matching `Wine` and `WineVariant`, then creates
+one `Bottle` row per requested quantity.
+
+If a cellar and location are provided, CellarMind creates active
+`BottleLocationHistory` rows for the new bottles.
+
+Manual additions are recorded through an `ImportSession` with source `manual`.
+
 ## ImportSession
 
 An `ImportSession` records an import operation.

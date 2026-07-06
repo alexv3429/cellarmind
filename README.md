@@ -204,6 +204,23 @@ List physical bottles:
 uv run cellarmind list bottles --database data/cellarmind.sqlite --limit 30
 ```
 
+Add bottles manually:
+
+```bash
+uv run cellarmind bottle add \
+  --database data/cellarmind.sqlite \
+  --producer "Domaine Test" \
+  --cuvee "Cuvée Test" \
+  --vintage 2020 \
+  --appellation "Bourgogne" \
+  --color Rouge \
+  --format 750ml \
+  --quantity 2 \
+  --cellar "Main cellar" \
+  --location "A12" \
+  --purchase-price 42
+```
+
 Move a physical bottle to another cellar location:
 
 ```bash

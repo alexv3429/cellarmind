@@ -10,6 +10,7 @@ from cellarmind.importing.schema import validate_csv_schema
 from cellarmind.importing.sqlite_importer import import_csv_to_database
 from cellarmind.infrastructure.csv_inspector import inspect_csv
 from cellarmind.storage.audit import AuditBreakdownRow, audit_database
+from cellarmind.storage.bottle_addition import add_bottles
 from cellarmind.storage.bottle_movement import move_bottle
 from cellarmind.storage.bottle_status import update_bottle_status
 from cellarmind.storage.cellars import list_cellars, update_cellar_profile
@@ -89,6 +90,65 @@ CellarNotesOption = Annotated[
         "--notes",
         help="Optional notes for the cellar.",
     ),
+]
+ProducerOption = Annotated[
+    str,
+    typer.Option("--producer", help="Wine producer."),
+]
+
+CuveeOption = Annotated[
+    str,
+    typer.Option("--cuvee", help="Wine cuvée."),
+]
+
+VintageOption = Annotated[
+    str,
+    typer.Option("--vintage", help="Wine vintage year or NV."),
+]
+
+AppellationOption = Annotated[
+    str,
+    typer.Option("--appellation", help="Wine appellation."),
+]
+
+ColorOption = Annotated[
+    str,
+    typer.Option("--color", help="Wine color."),
+]
+
+BottleFormatOption = Annotated[
+    str,
+    typer.Option("--format", help="Bottle format, for example 750ml or 150."),
+]
+
+BottleQuantityOption = Annotated[
+    int,
+    typer.Option("--quantity", "-q", min=1, help="Number of bottles to add."),
+]
+
+OptionalCellarNameOption = Annotated[
+    str | None,
+    typer.Option("--cellar", help="Cellar name."),
+]
+
+OptionalLocationNameOption = Annotated[
+    str | None,
+    typer.Option("--location", help="Location name."),
+]
+
+PurchasePriceOption = Annotated[
+    float | None,
+    typer.Option("--purchase-price", help="Purchase price per bottle."),
+]
+
+PersonalDrinkFromYearOption = Annotated[
+    int | None,
+    typer.Option("--personal-drink-from-year", help="Personal drink-from year."),
+]
+
+PersonalDrinkUntilYearOption = Annotated[
+    int | None,
+    typer.Option("--personal-drink-until-year", help="Personal drink-until year."),
 ]
 
 app = typer.Typer(help="CellarMind: wine cellar enrichment and maturity analysis.")
@@ -444,6 +504,51 @@ def mark_bottle_lost(
         bottle_id=bottle_id,
         status="lost",
     )
+
+
+@bottle_app.command("add")
+def add_bottle_command(
+    database: BottleDatabasePathOption = DEFAULT_DATABASE_PATH,
+    producer: ProducerOption = ...,
+    cuvee: CuveeOption = ...,
+    vintage: VintageOption = ...,
+    appellation: AppellationOption = ...,
+    color: ColorOption = ...,
+    bottle_format: BottleFormatOption = "750ml",
+    quantity: BottleQuantityOption = 1,
+    cellar: OptionalCellarNameOption = None,
+    location: OptionalLocationNameOption = None,
+    purchase_price: PurchasePriceOption = None,
+    personal_drink_from_year: PersonalDrinkFromYearOption = None,
+    personal_drink_until_year: PersonalDrinkUntilYearOption = None,
+) -> None:
+    """Add physical bottles manually."""
+    try:
+        result = add_bottles(
+            database,
+            producer=producer,
+            cuvee=cuvee,
+            vintage=vintage,
+            appellation=appellation,
+            color=color,
+            bottle_format=bottle_format,
+            quantity=quantity,
+            cellar_name=cellar,
+            location_name=location,
+            purchase_price=purchase_price,
+            personal_drink_from_year=personal_drink_from_year,
+            personal_drink_until_year=personal_drink_until_year,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+    console.print(f"Created bottles: {result.created_bottles}")
+    console.print(f"Wine ID: {result.wine_id}")
+    console.print(f"Wine variant ID: {result.wine_variant_id}")
+    console.print("Bottle IDs: " + ", ".join(str(bottle_id) for bottle_id in result.bottle_ids))
 
 
 @cellar_app.command("list")
