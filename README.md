@@ -300,6 +300,28 @@ The placement report detects:
 
 The report is advisory. It does not move bottles automatically.
 
+## Transfer planning
+
+CellarMind can suggest cellar transfers without applying them.
+
+```bash
+uv run cellarmind plan transfers \
+  --database data/cellarmind.sqlite \
+  --year 2026
+```
+
+The transfer plan uses the placement audit, cellar purposes, approximate capacity,
+active bottle locations, and personal drinking windows.
+
+It can suggest moving bottles between cellar types, for example:
+
+- too-young bottles from `drink_soon` cellars to `aging` cellars;
+- ready or overdue bottles from `aging` cellars to `drink_soon` cellars;
+- bottles out of `staging` or `overflow` cellars;
+- bottles with missing active locations for manual review.
+
+The command is read-only. It does not move bottles automatically.
+
 ## Domain model
 
 CellarMind separates wine identity from physical inventory:

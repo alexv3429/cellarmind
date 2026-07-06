@@ -18,6 +18,7 @@ from cellarmind.storage.inventory import list_bottles
 from cellarmind.storage.placement import PlacementIssue, audit_placement
 from cellarmind.storage.sqlite import initialize_database
 from cellarmind.storage.stats import get_database_stats
+from cellarmind.storage.transfer_plan import TransferSuggestion, plan_transfers
 
 DEFAULT_DATABASE_PATH = Path("data/cellarmind.sqlite")
 LimitOption = Annotated[
@@ -181,6 +182,8 @@ cellar_app = typer.Typer(help="Manage cellar profiles.")
 app.add_typer(cellar_app, name="cellar")
 report_app = typer.Typer(help="Generate cellar reports.")
 app.add_typer(report_app, name="report")
+plan_app = typer.Typer(help="Generate cellar transfer plans.")
+app.add_typer(plan_app, name="plan")
 console = Console(width=160)
 
 
@@ -655,6 +658,27 @@ def report_placement(
     _print_placement_issues(report.issues, limit=limit)
 
 
+@plan_app.command("transfers")
+def plan_cellar_transfers(
+    database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+    year: ReportYearOption = None,
+    limit: PlacementIssueLimitOption = 50,
+) -> None:
+    """Suggest cellar transfers without applying them."""
+    try:
+        transfer_plan = plan_transfers(
+            database,
+            as_of_year=year,
+            limit=limit,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+
+    _print_transfer_suggestions(transfer_plan.suggestions)
+
+
 def _print_audit_summary(report) -> None:
     summary = report.summary
 
@@ -835,3 +859,58 @@ def _format_issue_window(issue: PlacementIssue) -> str:
     )
 
     return f"{from_year}-{until_year}"
+
+
+def _print_transfer_suggestions(
+    suggestions: tuple[TransferSuggestion, ...],
+) -> None:
+    if not suggestions:
+        console.print("No transfer suggestions found.")
+        return
+
+    table = Table(title="Transfer plan", expand=False)
+    table.add_column("Action", no_wrap=True)
+    table.add_column("Bottle", justify="right", no_wrap=True)
+    table.add_column("Wine", overflow="fold", max_width=42)
+    table.add_column("From", overflow="fold", max_width=28)
+    table.add_column("To", overflow="fold", max_width=28)
+    table.add_column("Reason", overflow="fold", max_width=56)
+
+    for suggestion in suggestions:
+        table.add_row(
+            suggestion.action,
+            str(suggestion.bottle_id),
+            _format_transfer_wine(suggestion),
+            _format_transfer_current_location(suggestion),
+            _format_transfer_target(suggestion),
+            suggestion.reason,
+        )
+
+    console.print(table)
+
+
+def _format_transfer_wine(suggestion: TransferSuggestion) -> str:
+    return (
+        f"{suggestion.producer} — {suggestion.cuvee} "
+        f"{suggestion.vintage} ({suggestion.bottle_format})"
+    )
+
+
+def _format_transfer_current_location(suggestion: TransferSuggestion) -> str:
+    if suggestion.current_cellar is None:
+        return ""
+
+    if suggestion.current_location is None:
+        return suggestion.current_cellar
+
+    return f"{suggestion.current_cellar} / {suggestion.current_location}"
+
+
+def _format_transfer_target(suggestion: TransferSuggestion) -> str:
+    if suggestion.target_cellar is not None:
+        return suggestion.target_cellar
+
+    if suggestion.target_purpose is not None:
+        return f"Any {suggestion.target_purpose} cellar"
+
+    return "Review manually"
