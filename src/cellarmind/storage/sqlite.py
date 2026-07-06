@@ -12,6 +12,7 @@ EXPECTED_TABLES: tuple[str, ...] = (
     "wine_variant",
     "bottle",
     "cellar",
+    "reference_drinking_window",
     "location",
     "bottle_location_history",
 )
