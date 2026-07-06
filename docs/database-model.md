@@ -203,6 +203,28 @@ They are intentionally separate from future external enrichment data. Later,
 CellarMind may add provider-based drinking windows with confidence scores and
 evidence.
 
+### Drinking-window reporting
+
+The drinking-window report uses the personal drinking-window fields stored on
+`WineVariant`:
+
+```text
+personal_drink_from_year
+personal_drink_until_year
+```
+
+The report evaluates active bottles against a chosen year and classifies them as:
+
+```text
+overdue
+ready
+too_young
+unknown
+```
+
+The report is read-only and does not modify bottles, locations, or drinking
+windows.
+
 ### Uniqueness
 
 A suggested uniqueness rule is:
