@@ -322,6 +322,27 @@ It can suggest moving bottles between cellar types, for example:
 
 The command is read-only. It does not move bottles automatically.
 
+## Drinking-window report
+
+CellarMind can classify active bottles using personal drinking windows imported
+from the cellar CSV.
+
+```bash
+uv run cellarmind report drinking-window \
+  --database data/cellarmind.sqlite \
+  --year 2026
+```
+
+The report classifies active bottles as:
+
+- `overdue`: current year is after the personal drink-until year;
+- `ready`: current year is inside the personal drinking window;
+- `too_young`: current year is before the personal drink-from year;
+- `unknown`: no personal drinking window is available.
+
+The report only uses personal drinking windows already stored in the local
+SQLite database. It does not enrich data from external sources.
+
 ## Domain model
 
 CellarMind separates wine identity from physical inventory:

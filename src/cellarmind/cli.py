@@ -14,6 +14,7 @@ from cellarmind.storage.bottle_addition import add_bottles
 from cellarmind.storage.bottle_movement import move_bottle
 from cellarmind.storage.bottle_status import update_bottle_status
 from cellarmind.storage.cellars import list_cellars, update_cellar_profile
+from cellarmind.storage.drinking_window import DrinkingWindowBottle, report_drinking_windows
 from cellarmind.storage.inventory import list_bottles
 from cellarmind.storage.placement import PlacementIssue, audit_placement
 from cellarmind.storage.sqlite import initialize_database
@@ -168,6 +169,16 @@ PlacementIssueLimitOption = Annotated[
         "-l",
         min=1,
         help="Maximum number of placement issues to display.",
+    ),
+]
+
+ReportLimitOption = Annotated[
+    int,
+    typer.Option(
+        "--limit",
+        "-l",
+        min=1,
+        help="Maximum number of rows to display in the report.",
     ),
 ]
 
@@ -658,6 +669,28 @@ def report_placement(
     _print_placement_issues(report.issues, limit=limit)
 
 
+@report_app.command("drinking-window")
+def report_drinking_window(
+    database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+    year: ReportYearOption = None,
+    limit: ReportLimitOption = 50,
+) -> None:
+    """Report active bottles by personal drinking window."""
+    try:
+        report = report_drinking_windows(
+            database,
+            as_of_year=year,
+            limit=limit,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+
+    _print_drinking_window_summary(report)
+    _print_drinking_window_bottles(report.bottles)
+
+
 @plan_app.command("transfers")
 def plan_cellar_transfers(
     database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
@@ -914,3 +947,72 @@ def _format_transfer_target(suggestion: TransferSuggestion) -> str:
         return f"Any {suggestion.target_purpose} cellar"
 
     return "Review manually"
+
+
+def _print_drinking_window_summary(report) -> None:
+    summary = report.summary
+
+    table = Table(title="Drinking-window report", expand=False)
+    table.add_column("Metric", no_wrap=True)
+    table.add_column("Value", justify="right", no_wrap=True)
+
+    table.add_row("As of year", str(summary.as_of_year))
+    table.add_row("Active bottles", str(summary.active_bottles))
+    table.add_row("Overdue bottles", str(summary.overdue_bottles))
+    table.add_row("Ready bottles", str(summary.ready_bottles))
+    table.add_row("Too-young bottles", str(summary.too_young_bottles))
+    table.add_row("Unknown-window bottles", str(summary.unknown_window_bottles))
+
+    console.print(table)
+
+
+def _print_drinking_window_bottles(
+    bottles: tuple[DrinkingWindowBottle, ...],
+) -> None:
+    if not bottles:
+        console.print("No active bottles found.")
+        return
+
+    table = Table(title="Drinking-window bottles", expand=False)
+    table.add_column("Category", no_wrap=True, min_width=10)
+    table.add_column("Bottle", justify="right", no_wrap=True)
+    table.add_column("Wine", overflow="fold", max_width=42)
+    table.add_column("Color", no_wrap=True)
+    table.add_column("Cellar", overflow="fold", max_width=24)
+    table.add_column("Location", no_wrap=True, overflow="ignore")
+    table.add_column("Window", no_wrap=True)
+    table.add_column("Note", overflow="fold", max_width=56)
+
+    for bottle in bottles:
+        table.add_row(
+            bottle.category,
+            str(bottle.bottle_id),
+            _format_drinking_window_wine(bottle),
+            bottle.color,
+            bottle.cellar or "",
+            bottle.location or "",
+            _format_drinking_window(bottle),
+            bottle.note,
+        )
+
+    console.print(table)
+
+
+def _format_drinking_window_wine(bottle: DrinkingWindowBottle) -> str:
+    return f"{bottle.producer} — {bottle.cuvee} {bottle.vintage} ({bottle.bottle_format})"
+
+
+def _format_drinking_window(bottle: DrinkingWindowBottle) -> str:
+    if bottle.personal_drink_from_year is None and bottle.personal_drink_until_year is None:
+        return ""
+
+    from_year = (
+        str(bottle.personal_drink_from_year) if bottle.personal_drink_from_year is not None else "?"
+    )
+    until_year = (
+        str(bottle.personal_drink_until_year)
+        if bottle.personal_drink_until_year is not None
+        else "?"
+    )
+
+    return f"{from_year}-{until_year}"

@@ -209,3 +209,24 @@ Typical suggestions include:
 - moving ready or overdue bottles from `aging` cellars to `drink_soon` cellars;
 - reviewing bottles in `staging` or `overflow` cellars;
 - reviewing bottles without an active location.
+
+## Report drinking windows
+
+CellarMind can classify active bottles according to personal drinking windows.
+
+```bash
+uv run cellarmind report drinking-window \
+  --database data/cellarmind.sqlite \
+  --year 2026 \
+  --limit 50
+```
+
+The command is read-only and reports:
+
+- overdue bottles;
+- bottles ready to drink;
+- bottles that are still too young;
+- bottles with unknown personal drinking windows.
+
+Only active bottles are included. Bottles marked as `consumed`, `gifted`, `sold`,
+or `lost` are excluded.
