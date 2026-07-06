@@ -58,7 +58,7 @@ def test_list_cellars_counts_active_bottles(tmp_path: Path) -> None:
     update_cellar_profile(
         database_path,
         name="Main",
-        purpose="drinking",
+        purpose="drink_soon",
         capacity_estimate=3,
         capacity_warning_threshold=2,
     )
@@ -67,7 +67,7 @@ def test_list_cellars_counts_active_bottles(tmp_path: Path) -> None:
 
     assert len(cellars) == 1
     assert cellars[0].name == "Main"
-    assert cellars[0].purpose == "drinking"
+    assert cellars[0].purpose == "drink_soon"
     assert cellars[0].active_bottles == 2
     assert cellars[0].capacity_estimate == 3
     assert cellars[0].occupancy_status == "near_capacity"
@@ -173,3 +173,31 @@ def test_cellar_update_command(tmp_path: Path) -> None:
     assert cellars[0].capacity_estimate == 350
     assert cellars[0].capacity_warning_threshold == 330
     assert cellars[0].notes == "Main aging cellar"
+
+
+def test_list_cellars_ignores_non_active_bottle_even_with_active_location(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "cave.csv"
+    database_path = tmp_path / "cellarmind.sqlite"
+
+    input_path.write_text(
+        "Cave,Place,Année prod,Cuvée,Appellation,Vignoble couleur,Producteur,Nb,Fmt\n"
+        "Main,A1,2018,Brut Réserve,Champagne,Blanc,Maison Test,1,75\n",
+        encoding="utf-8",
+    )
+
+    import_csv_to_database(input_path, database_path)
+
+    with connect_database(database_path) as connection:
+        connection.execute(
+            """
+            UPDATE bottle
+            SET status = 'consumed'
+            WHERE id = 1
+            """
+        )
+
+    cellars = list_cellars(database_path)
+
+    assert cellars[0].active_bottles == 0

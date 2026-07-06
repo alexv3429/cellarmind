@@ -164,11 +164,10 @@ Supported cellar purposes are:
 
 ```text
 aging
-drinking
+drink_soon
 mixed
 staging
 overflow
-other
 ```
 
 ## SQLite workflow

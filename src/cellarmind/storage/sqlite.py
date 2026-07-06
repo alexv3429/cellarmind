@@ -92,11 +92,10 @@ CREATE TABLE IF NOT EXISTS cellar (
     CHECK (
         purpose IN (
             'aging',
-            'drinking',
+            'drink_soon',
             'mixed',
             'staging',
-            'overflow',
-            'other'
+            'overflow'
         )
     ),
     CHECK (
@@ -104,6 +103,10 @@ CREATE TABLE IF NOT EXISTS cellar (
     ),
     CHECK (
         capacity_warning_threshold IS NULL OR capacity_warning_threshold >= 0
+    ),
+    CHECK (
+        capacity_estimate IS NULL OR capacity_warning_threshold IS NULL OR
+        capacity_warning_threshold <= capacity_estimate
     )
 );
 

@@ -9,11 +9,10 @@ from cellarmind.storage.sqlite import connect_database
 VALID_CELLAR_PURPOSES = frozenset(
     {
         "aging",
-        "drinking",
+        "drink_soon",
         "mixed",
         "staging",
         "overflow",
-        "other",
     }
 )
 
@@ -42,7 +41,7 @@ def list_cellars(database_path: Path) -> tuple[CellarProfile, ...]:
                 cellar.capacity_estimate,
                 cellar.capacity_warning_threshold,
                 cellar.notes,
-                COUNT(bottle_location_history.bottle_id) AS active_bottles
+                COUNT(bottle.id) AS active_bottles
             FROM cellar
             LEFT JOIN location
                 ON location.cellar_id = cellar.id

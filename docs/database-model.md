@@ -347,15 +347,14 @@ capacity_warning_threshold
 notes
 ```
 
-And the following purposes are suported:
+And the following purposes are supported:
 
 ```text
 aging
-drinking
+drink_soon
 mixed
 staging
 overflow
-other
 ```
 
 ## Location

@@ -121,7 +121,7 @@ uv run cellarmind db audit --path data/cellarmind.sqlite
 
 ## Configure cellar profiles
 
-CellarMind can  store the intended role and approximate capacityof each cellar.
+CellarMind can  store the intended role and approximate capacity of each cellar.
 
 ```bash
 uv run cellarmind cellar update "Main cellar" \
