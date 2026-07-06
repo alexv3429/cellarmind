@@ -73,7 +73,6 @@ CREATE TABLE IF NOT EXISTS bottle (
             'consumed',
             'sold',
             'gifted',
-            'broken',
             'lost'
         )
     ),
