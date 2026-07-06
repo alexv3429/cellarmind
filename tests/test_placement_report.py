@@ -202,8 +202,6 @@ def test_report_placement_command_outputs_audit(
         ],
     )
 
-    print(result.output)
-
     assert result.exit_code == 0
     assert "Database:" in result.output
     assert "Placement audit" in result.output

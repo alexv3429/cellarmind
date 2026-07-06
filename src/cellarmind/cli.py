@@ -68,7 +68,7 @@ CellarPurposeOption = Annotated[
     str | None,
     typer.Option(
         "--purpose",
-        help="Cellar purpose (aging, drinking, mixed, staging, overflow, other).",
+        help="Cellar purpose (aging, drink_soon, mixed, staging, overflow).",
     ),
 ]
 CapacityEstimateOption = Annotated[
