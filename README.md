@@ -428,6 +428,35 @@ personal_drink_until_year
 
 These fields represent the user’s own estimates. They are intentionally separate from future external enrichment data, confidence scores, and evidence.
 
+## Reference drinking windows
+
+CellarMind can store external or manual reference drinking windows separately
+from personal drinking windows.
+
+```bash
+uv run cellarmind reference-window add \
+  --database data/cellarmind.sqlite \
+  --wine-id 123 \
+  --source-name "Manual reference" \
+  --drink-from-year 2024 \
+  --drink-until-year 2032 \
+  --confidence medium
+```
+
+List references:
+
+```bash
+uv run cellarmind reference-window list \
+  --database data/cellarmind.sqlite \
+  --wine-id 123
+```
+
+Reference windows are linked to `Wine`, while personal windows remain on
+`WineVariant`.
+
+Reference windows do not replace personal windows. They are stored as separate
+local evidence for later comparison.
+
 ## Development
 
 Run the full local check suite:

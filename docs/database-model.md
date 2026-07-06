@@ -245,6 +245,26 @@ time and are not persisted.
 The recommendation command does not modify `Bottle`, `BottleLocationHistory`, or
 `WineVariant`.
 
+## ReferenceDrinkingWindow
+
+`reference_drinking_window` stores external or manual drinking-window evidence.
+
+It is linked to `Wine`, not `WineVariant`.
+
+```text
+Wine 1 ── * ReferenceDrinkingWindow
+```
+
+Personal drinking windows remain on `WineVariant`:
+
+```text
+WineVariant.personal_drink_from_year
+WineVariant.personal_drink_until_year
+```
+
+Reference windows are intentionally separate. They can later be compared with
+personal windows, but they do not replace them automatically.
+
 ### Uniqueness
 
 A suggested uniqueness rule is:
