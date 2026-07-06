@@ -151,3 +151,39 @@ uv run cellarmind cellar update "Main cellar" \
   --capacity-estimate 350 \
   --capacity-warning-threshold 330
 ```
+
+## Audit cellar placement
+
+After configuring cellar profiles, CellarMind can audit cellar placement.
+
+```bash
+uv run cellarmind report placement \
+  --database data/cellarmind.sqlite
+```
+
+The placement report combines:
+
+- active bottle locations;
+- bottle lifecycle status;
+- cellar purpose;
+- approximate cellar capacity;
+- personal drinking windows.
+
+Examples of detected placement issues:
+
+- bottle without active location;
+- bottle in a staging cellar;
+- bottle in an overflow cellar;
+- too-young bottle in a `drink_soon` cellar;
+- ready or overdue bottle still in an `aging` cellar;
+- cellar near or over approximate capacity.
+
+Use `--year` to evaluate drinking windows against a specific year:
+
+```bash
+uv run cellarmind report placement \
+  --database data/cellarmind.sqlite \
+  --year 2026
+```
+
+The report is read-only. It does not move bottles automatically.

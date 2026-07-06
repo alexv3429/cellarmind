@@ -15,6 +15,7 @@ from cellarmind.storage.bottle_movement import move_bottle
 from cellarmind.storage.bottle_status import update_bottle_status
 from cellarmind.storage.cellars import list_cellars, update_cellar_profile
 from cellarmind.storage.inventory import list_bottles
+from cellarmind.storage.placement import PlacementIssue, audit_placement
 from cellarmind.storage.sqlite import initialize_database
 from cellarmind.storage.stats import get_database_stats
 
@@ -67,7 +68,7 @@ CellarPurposeOption = Annotated[
     str | None,
     typer.Option(
         "--purpose",
-        help="Cellar purpose (aging, drinking, mixed, staging, overflow, other).",
+        help="Cellar purpose (aging, drink_soon, mixed, staging, overflow).",
     ),
 ]
 CapacityEstimateOption = Annotated[
@@ -151,6 +152,24 @@ PersonalDrinkUntilYearOption = Annotated[
     typer.Option("--personal-drink-until-year", help="Personal drink-until year."),
 ]
 
+ReportYearOption = Annotated[
+    int | None,
+    typer.Option(
+        "--year",
+        help="Year used to evaluate drinking windows. Defaults to current year.",
+    ),
+]
+
+PlacementIssueLimitOption = Annotated[
+    int,
+    typer.Option(
+        "--limit",
+        "-l",
+        min=1,
+        help="Maximum number of placement issues to display.",
+    ),
+]
+
 app = typer.Typer(help="CellarMind: wine cellar enrichment and maturity analysis.")
 db_app = typer.Typer(help="Manage the CellarMind SQLite database.")
 app.add_typer(db_app, name="db")
@@ -160,6 +179,8 @@ bottle_app = typer.Typer(help="Manage physical bottles.")
 app.add_typer(bottle_app, name="bottle")
 cellar_app = typer.Typer(help="Manage cellar profiles.")
 app.add_typer(cellar_app, name="cellar")
+report_app = typer.Typer(help="Generate cellar reports.")
+app.add_typer(report_app, name="report")
 console = Console(width=160)
 
 
@@ -612,6 +633,28 @@ def update_cellar(
     console.print(f"Updated cellar: {name}")
 
 
+@report_app.command("placement")
+def report_placement(
+    database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+    year: ReportYearOption = None,
+    limit: PlacementIssueLimitOption = 50,
+) -> None:
+    """Audit cellar placement, capacity, and location issues."""
+    try:
+        report = audit_placement(
+            database,
+            as_of_year=year,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+
+    _print_placement_summary(report)
+    _print_cellar_occupancy(report)
+    _print_placement_issues(report.issues, limit=limit)
+
+
 def _print_audit_summary(report) -> None:
     summary = report.summary
 
@@ -682,3 +725,113 @@ def _mark_bottle_status(
 
     if result.closed_location_history_rows:
         console.print("Closed active location.")
+
+
+def _print_placement_summary(report) -> None:
+    summary = report.summary
+
+    table = Table(title="Placement audit", expand=False)
+    table.add_column("Metric", no_wrap=True)
+    table.add_column("Value", justify="right", no_wrap=True)
+
+    table.add_row("As of year", str(summary.as_of_year))
+    table.add_row("Active bottles", str(summary.active_bottles))
+    table.add_row("Bottles without location", str(summary.bottles_without_location))
+    table.add_row("Cellars near capacity", str(summary.cellars_near_capacity))
+    table.add_row("Cellars over capacity", str(summary.cellars_over_capacity))
+    table.add_row("Bottles in staging cellars", str(summary.bottles_in_staging_cellars))
+    table.add_row("Bottles in overflow cellars", str(summary.bottles_in_overflow_cellars))
+    table.add_row(
+        "Too young in drink-soon cellars",
+        str(summary.too_young_bottles_in_drink_soon_cellars),
+    )
+    table.add_row(
+        "Ready or overdue in aging cellars",
+        str(summary.ready_or_overdue_bottles_in_aging_cellars),
+    )
+    table.add_row(
+        "Unknown window in drink-soon cellars",
+        str(summary.unknown_window_bottles_in_drink_soon_cellars),
+    )
+
+    console.print(table)
+
+
+def _print_cellar_occupancy(report) -> None:
+    table = Table(title="Cellar occupancy", expand=False)
+    table.add_column("Cellar", no_wrap=True, overflow="ignore")
+    table.add_column("Purpose", no_wrap=True)
+    table.add_column("Bottles", justify="right", no_wrap=True)
+    table.add_column("Capacity", justify="right", no_wrap=True)
+    table.add_column("Warning", justify="right", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Notes", no_wrap=True, overflow="ignore")
+
+    for cellar in report.cellar_occupancy:
+        table.add_row(
+            cellar.name,
+            cellar.purpose,
+            str(cellar.active_bottles),
+            (str(cellar.capacity_estimate) if cellar.capacity_estimate is not None else ""),
+            (
+                str(cellar.capacity_warning_threshold)
+                if cellar.capacity_warning_threshold is not None
+                else ""
+            ),
+            cellar.occupancy_status,
+            cellar.notes or "",
+        )
+
+    console.print(table)
+
+
+def _print_placement_issues(
+    issues: tuple[PlacementIssue, ...],
+    *,
+    limit: int,
+) -> None:
+    if not issues:
+        console.print("No placement issues found.")
+        return
+
+    table = Table(title=f"Placement issues, first {limit}", expand=False)
+    table.add_column("Severity", no_wrap=True, overflow="ignore", min_width=8)
+    table.add_column("Issue", no_wrap=True, overflow="ignore", min_width=32)
+    table.add_column("Bottle", justify="right", no_wrap=True, min_width=6)
+    table.add_column("Wine", overflow="fold", max_width=42)
+    table.add_column("Cellar", no_wrap=True, overflow="ignore", min_width=8)
+    table.add_column("Location", no_wrap=True, overflow="ignore", min_width=8)
+    table.add_column("Window", no_wrap=True, overflow="ignore", min_width=9)
+    table.add_column("Note", overflow="fold", max_width=56)
+
+    for issue in issues[:limit]:
+        table.add_row(
+            issue.severity,
+            issue.issue_type,
+            str(issue.bottle_id),
+            _format_issue_wine(issue),
+            issue.cellar or "",
+            issue.location or "",
+            _format_issue_window(issue),
+            issue.note,
+        )
+
+    console.print(table)
+
+
+def _format_issue_wine(issue: PlacementIssue) -> str:
+    return f"{issue.producer} — {issue.cuvee} {issue.vintage} ({issue.bottle_format})"
+
+
+def _format_issue_window(issue: PlacementIssue) -> str:
+    if issue.personal_drink_from_year is None and issue.personal_drink_until_year is None:
+        return ""
+
+    from_year = (
+        str(issue.personal_drink_from_year) if issue.personal_drink_from_year is not None else "?"
+    )
+    until_year = (
+        str(issue.personal_drink_until_year) if issue.personal_drink_until_year is not None else "?"
+    )
+
+    return f"{from_year}-{until_year}"
