@@ -221,3 +221,36 @@ def test_plan_transfers_command_outputs_suggestions(
     assert "Transfer plan" in result.output
     assert "Ready Wine" in result.output
     assert "DrinkSoon" in result.output
+
+
+def test_transfer_plan_does_not_target_cellar_at_capacity(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "cave.csv"
+    database_path = tmp_path / "cellarmind.sqlite"
+
+    input_path.write_text(
+        "Cave,Place,Année prod,Cuvée,Appellation,Vignoble couleur,Producteur,"
+        "Année min,Année Max,Nb,Fmt\n"
+        "DrinkSoon,D1,2022,Young Wine,Bourgogne,Rouge,Domaine Test,2030,2035,1,75\n"
+        "AgingFull,A1,2020,Aging Full Placeholder,Bourgogne,Rouge,Domaine Test,,,5,75\n",
+        encoding="utf-8",
+    )
+
+    import_csv_to_database(input_path, database_path)
+
+    update_cellar_profile(database_path, name="DrinkSoon", purpose="drink_soon")
+    update_cellar_profile(
+        database_path,
+        name="AgingFull",
+        purpose="aging",
+        capacity_estimate=5,
+        capacity_warning_threshold=5,
+    )
+
+    transfer_plan = plan_transfers(database_path, as_of_year=2025)
+
+    assert len(transfer_plan.suggestions) == 1
+    assert transfer_plan.suggestions[0].action == "review"
+    assert transfer_plan.suggestions[0].target_cellar is None
+    assert transfer_plan.suggestions[0].target_purpose == "aging"

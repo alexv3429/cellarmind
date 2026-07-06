@@ -156,6 +156,13 @@ def _target_purpose_for_window(
     return "drink_soon"
 
 
+def _has_available_capacity(cellar: CellarProfile) -> bool:
+    if cellar.capacity_estimate is None:
+        return True
+
+    return cellar.active_bottles < cellar.capacity_estimate
+
+
 def _find_target_cellar(
     cellars: tuple[CellarProfile, ...],
     *,
@@ -168,6 +175,7 @@ def _find_target_cellar(
         if cellar.purpose == purpose
         and cellar.name != current_cellar
         and cellar.occupancy_status != "over_capacity"
+        and _has_available_capacity(cellar)
     ]
 
     if not candidates:
