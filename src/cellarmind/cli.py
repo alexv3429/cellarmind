@@ -26,6 +26,11 @@ from cellarmind.storage.reference_windows import (
     add_reference_window,
     list_reference_windows,
 )
+from cellarmind.storage.reference_windows_fetcher import (
+    ReferenceWindowCandidate,
+    fetch_and_add_reference_window,
+    fetch_reference_window_candidate,
+)
 from cellarmind.storage.sqlite import initialize_database
 from cellarmind.storage.stats import get_database_stats
 from cellarmind.storage.transfer_plan import TransferSuggestion, plan_transfers
@@ -258,6 +263,40 @@ ReferenceNotesOption = Annotated[
     typer.Option(
         "--notes",
         help="Optional notes about the reference.",
+    ),
+]
+
+ReferenceFetchUrlOption = Annotated[
+    str,
+    typer.Option(
+        "--url",
+        help="Source URL to fetch and parse.",
+    ),
+]
+
+OptionalReferenceSourceNameOption = Annotated[
+    str | None,
+    typer.Option(
+        "--source-name",
+        help="Optional source name. Defaults to the URL host.",
+    ),
+]
+
+ReferenceFetchTimeoutOption = Annotated[
+    float,
+    typer.Option(
+        "--timeout-seconds",
+        min=1.0,
+        max=60.0,
+        help="HTTP timeout in seconds.",
+    ),
+]
+
+SaveReferenceWindowOption = Annotated[
+    bool,
+    typer.Option(
+        "--save/--dry-run",
+        help="Save the extracted reference window. Defaults to dry-run.",
     ),
 ]
 
@@ -905,6 +944,51 @@ def list_reference_window_command(
     _print_reference_windows(windows)
 
 
+@reference_window_app.command("fetch")
+def fetch_reference_window_command(
+    wine_id: ReferenceWineIdOption,
+    source_url: ReferenceFetchUrlOption,
+    database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+    source_name: OptionalReferenceSourceNameOption = None,
+    confidence: ReferenceConfidenceOption = "medium",
+    timeout_seconds: ReferenceFetchTimeoutOption = 15.0,
+    save: SaveReferenceWindowOption = False,
+) -> None:
+    """Fetch a reference drinking window from a source URL."""
+    try:
+        candidate = fetch_reference_window_candidate(
+            source_url=source_url,
+            source_name=source_name,
+            timeout_seconds=timeout_seconds,
+        )
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+    console.print(f"Wine ID: {wine_id}")
+    _print_reference_window_candidate(candidate)
+
+    if not save:
+        console.print("Dry-run only. Re-run with --save to store this reference.")
+        return
+
+    try:
+        window = fetch_and_add_reference_window(
+            database,
+            wine_id=wine_id,
+            source_url=source_url,
+            source_name=source_name,
+            confidence=confidence,
+            timeout_seconds=timeout_seconds,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Saved reference drinking window {window.id} for wine {window.wine_id}.")
+
+
 def _print_audit_summary(report) -> None:
     summary = report.summary
 
@@ -1436,3 +1520,28 @@ def _format_year_range(
     resolved_until = str(until_year) if until_year is not None else "?"
 
     return f"{resolved_from}-{resolved_until}"
+
+
+def _print_reference_window_candidate(
+    candidate: ReferenceWindowCandidate,
+) -> None:
+    table = Table(title="Fetched reference drinking window", expand=False)
+    table.add_column("Field", no_wrap=True)
+    table.add_column("Value", overflow="fold", max_width=80)
+
+    table.add_row("Source", candidate.source_name)
+    table.add_row("URL", candidate.source_url)
+    table.add_row("Window", _format_reference_window_candidate(candidate))
+    table.add_row("Confidence", candidate.confidence)
+    table.add_row("Evidence", candidate.evidence_text)
+
+    console.print(table)
+
+
+def _format_reference_window_candidate(
+    candidate: ReferenceWindowCandidate,
+) -> str:
+    from_year = str(candidate.drink_from_year) if candidate.drink_from_year is not None else "?"
+    until_year = str(candidate.drink_until_year) if candidate.drink_until_year is not None else "?"
+
+    return f"{from_year}-{until_year}"

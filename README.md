@@ -467,6 +467,38 @@ uv run cellarmind report window-comparison \
   --tolerance-years 2
 ```
 
+## Fetch reference windows from the internet
+
+CellarMind can fetch a web page and extract a likely drinking window from its
+text.
+
+Dry-run:
+
+```bash
+uv run cellarmind reference-window fetch \
+  --database data/cellarmind.sqlite \
+  --wine-id 123 \
+  --url "https://example.com/wine-page"
+```
+
+Save the extracted window:
+
+```bash
+uv run cellarmind reference-window fetch \
+  --database data/cellarmind.sqlite \
+  --wine-id 123 \
+  --url "https://example.com/wine-page" \
+  --source-name "Producer website" \
+  --confidence medium \
+  --save
+```
+
+The command stores the source URL and extracted evidence in
+`reference_drinking_window`.
+
+The default mode is dry-run. CellarMind does not silently modify personal
+drinking windows.
+
 ## Development
 
 Run the full local check suite:

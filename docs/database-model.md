@@ -276,6 +276,28 @@ ReferenceDrinkingWindow.drink_from_year
 ReferenceDrinkingWindow.drink_until_year
 ```
 
+### Internet extraction
+
+`reference-window fetch` can extract a candidate reference drinking window from a
+source URL.
+
+The command stores:
+
+```text
+source_name
+source_url
+drink_from_year
+drink_until_year
+confidence
+notes
+```
+
+The notes field includes a short extracted evidence snippet.
+
+Internet-extracted windows remain reference evidence. They do not overwrite
+`WineVariant.personal_drink_from_year` or
+`WineVariant.personal_drink_until_year`.
+
 ### Uniqueness
 
 A suggested uniqueness rule is:

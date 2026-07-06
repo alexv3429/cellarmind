@@ -288,3 +288,30 @@ uv run cellarmind report window-comparison \
   --tolerance-years 2 \
   --limit 50
 ```
+
+## Fetch a reference drinking window from a web page
+
+Use `reference-window fetch` when you have a producer, merchant, critic, or
+other source page that mentions a drinking window.
+
+```bash
+uv run cellarmind reference-window fetch \
+  --database data/cellarmind.sqlite \
+  --wine-id 123 \
+  --url "https://example.com/wine-page"
+```
+
+Review the extracted candidate. Then save it explicitly:
+
+```bash
+uv run cellarmind reference-window fetch \
+  --database data/cellarmind.sqlite \
+  --wine-id 123 \
+  --url "https://example.com/wine-page" \
+  --source-name "Producer website" \
+  --confidence medium \
+  --save
+```
+
+The fetched window is stored as reference evidence. It does not replace the
+personal drinking window.
