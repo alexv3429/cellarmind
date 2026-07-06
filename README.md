@@ -343,6 +343,37 @@ The report classifies active bottles as:
 The report only uses personal drinking windows already stored in the local
 SQLite database. It does not enrich data from external sources.
 
+## Drinking recommendations
+
+CellarMind can recommend what to drink, hold, or review based on personal
+drinking windows and cellar context.
+
+```bash
+uv run cellarmind recommend drinking \
+  --database data/cellarmind.sqlite \
+  --year 2026
+```
+
+Recommendations are read-only. They do not update bottle status and do not move
+bottles.
+
+Possible actions are:
+
+- `drink_now`: bottle should be prioritized for drinking;
+- `consider_drinking`: bottle is ready and worth considering;
+- `hold`: bottle appears too young according to the personal drinking window;
+- `review`: bottle needs manual review, for example because it has no active
+  location or no known personal drinking window.
+
+The recommendation engine uses only local SQLite data:
+
+- active bottle status;
+- personal drinking windows;
+- cellar purpose;
+- current location.
+
+It does not enrich data from external sources.
+
 ## Domain model
 
 CellarMind separates wine identity from physical inventory:
