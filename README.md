@@ -173,6 +173,14 @@ List physical bottles:
 uv run cellarmind list bottles --database data/cellarmind.sqlite --limit 30
 ```
 
+Move a physical bottle to another cellar location:
+
+```bash
+uv run cellarmind bottle move 123 \
+  --database data/cellarmind.sqlite \
+  --cellar "Main cellar" \
+  --location "A12"
+
 Audit an imported cellar:
 
 ```bash

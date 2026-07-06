@@ -10,6 +10,7 @@ from cellarmind.importing.schema import validate_csv_schema
 from cellarmind.importing.sqlite_importer import import_csv_to_database
 from cellarmind.infrastructure.csv_inspector import inspect_csv
 from cellarmind.storage.audit import AuditBreakdownRow, audit_database
+from cellarmind.storage.bottle_movement import move_bottle
 from cellarmind.storage.inventory import list_bottles
 from cellarmind.storage.sqlite import initialize_database
 from cellarmind.storage.stats import get_database_stats
@@ -49,12 +50,24 @@ ImportDatabasePathOption = Annotated[
         help="SQLite database path.",
     ),
 ]
+BottleDatabasePathOption = Annotated[
+    Path,
+    typer.Option(
+        "--database",
+        "-d",
+        help="SQLite database path.",
+    ),
+]
+CellarNameOption = Annotated[str, typer.Option("--cellar", help="Target cellar name.")]
+LocationNameOption = Annotated[str, typer.Option("--location", help="Target location name.")]
 
 app = typer.Typer(help="CellarMind: wine cellar enrichment and maturity analysis.")
 db_app = typer.Typer(help="Manage the CellarMind SQLite database.")
 app.add_typer(db_app, name="db")
 list_app = typer.Typer(help="List cellar contents.")
 app.add_typer(list_app, name="list")
+bottle_app = typer.Typer(help="Manage physical bottles.")
+app.add_typer(bottle_app, name="bottle")
 console = Console(width=160)
 
 
@@ -291,6 +304,49 @@ def list_bottle_inventory(
         )
 
     console.print(table)
+
+
+@bottle_app.command("move")
+def move_bottle_command(
+    bottle_id: int,
+    database: BottleDatabasePathOption = DEFAULT_DATABASE_PATH,
+    cellar: CellarNameOption = ...,
+    location: LocationNameOption = ...,
+) -> None:
+    """Move a physical bottle to another cellar location."""
+    try:
+        result = move_bottle(
+            database,
+            bottle_id=bottle_id,
+            cellar_name=cellar,
+            location_name=location,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+
+    if result.moved:
+        if result.previous_location is None:
+            console.print(
+                f"Moved bottle {result.bottle_id} to "
+                f"{result.new_location.cellar} / {result.new_location.location}"
+            )
+        else:
+            console.print(
+                f"Moved bottle {result.bottle_id} from "
+                f"{result.previous_location.cellar} / "
+                f"{result.previous_location.location} to "
+                f"{result.new_location.cellar} / "
+                f"{result.new_location.location}"
+            )
+    else:
+        console.print(
+            f"Bottle {result.bottle_id} is already at "
+            f"{result.new_location.cellar} / {result.new_location.location}"
+        )
 
 
 def _print_audit_summary(report) -> None:
