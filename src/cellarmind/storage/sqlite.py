@@ -73,8 +73,7 @@ CREATE TABLE IF NOT EXISTS bottle (
             'consumed',
             'sold',
             'gifted',
-            'broken',
-            'missing'
+            'lost'
         )
     ),
     FOREIGN KEY (wine_variant_id) REFERENCES wine_variant (id) ON DELETE RESTRICT,

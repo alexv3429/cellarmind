@@ -180,6 +180,26 @@ uv run cellarmind bottle move 123 \
   --database data/cellarmind.sqlite \
   --cellar "Main cellar" \
   --location "A12"
+```
+
+Mark a bottle as opened:
+
+```bash
+uv run cellarmind bottle mark-opened 123 \
+  --database data/cellarmind.sqlite
+```
+
+Mark a bottle as out of the cellar:
+
+```bash
+uv run cellarmind bottle mark-consumed 123 \
+  --database data/cellarmind.sqlite
+```
+
+Other options can be used to mark a bottle as out:
+ * `mark-gifted`
+ * `mark-sold`
+ * `mark-lost`
 
 Audit an imported cellar:
 

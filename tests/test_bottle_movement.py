@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 from cellarmind.cli import app
 from cellarmind.importing.sqlite_importer import import_csv_to_database
 from cellarmind.storage.bottle_movement import move_bottle
+from cellarmind.storage.bottle_status import update_bottle_status
 from cellarmind.storage.sqlite import connect_database
 
 runner = CliRunner()
@@ -214,3 +215,32 @@ def test_bottle_move_command(tmp_path: Path) -> None:
     assert "A1" in result.output
     assert "Annex" in result.output
     assert "B2" in result.output
+
+
+def test_move_bottle_rejects_out_of_cellar_bottle(tmp_path: Path) -> None:
+    input_path = tmp_path / "cave.csv"
+    database_path = tmp_path / "cellarmind.sqlite"
+
+    input_path.write_text(
+        "Cave,Place,Année prod,Cuvée,Appellation,Vignoble couleur,Producteur,Nb,Fmt\n"
+        "Main,A1,2018,Brut Réserve,Champagne,Blanc,Maison Test,1,75\n",
+        encoding="utf-8",
+    )
+
+    import_csv_to_database(input_path, database_path)
+
+    update_bottle_status(
+        database_path,
+        bottle_id=1,
+        new_status="consumed",
+    )
+
+    with pytest.raises(
+        ValueError, match="Bottle 1 cannot be moved because its status is 'consumed'."
+    ):
+        move_bottle(
+            database_path,
+            bottle_id=1,
+            cellar_name="Annex",
+            location_name="B2",
+        )

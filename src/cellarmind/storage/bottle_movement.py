@@ -43,6 +43,12 @@ def move_bottle(
     with connect_database(database_path) as connection:
         _ensure_bottle_exists(connection, bottle_id)
 
+        status = _get_bottle_status(connection, bottle_id)
+        if status not in {"in_cellar", "opened"}:
+            raise ValueError(
+                f"Bottle {bottle_id} cannot be moved because its status is '{status}'."
+            )
+
         previous_location = _get_active_bottle_location(connection, bottle_id)
 
         new_location = BottleLocation(
@@ -106,6 +112,22 @@ def _ensure_bottle_exists(connection: Connection, bottle_id: int) -> None:
 
     if row is None:
         raise ValueError(f"Bottle does not exist: {bottle_id}")
+
+
+def _get_bottle_status(connection: Connection, bottle_id: int) -> str:
+    row = connection.execute(
+        """
+        SELECT status
+        FROM bottle
+        WHERE id = ?
+        """,
+        (bottle_id,),
+    ).fetchone()
+
+    if row is None:
+        raise ValueError(f"Bottle does not exist: {bottle_id}")
+
+    return row["status"]
 
 
 def _get_active_bottle_location(

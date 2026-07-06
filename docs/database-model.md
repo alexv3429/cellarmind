@@ -425,6 +425,31 @@ A bottle should have at most one active location history row, identified by:
 ended_at IS NULL
 ```
 
+### Bottle status
+
+`bottle.status` tracks the lifecycle state of a physical bottle.
+
+Supported statuses are:
+
+```text
+in_cellar
+opened
+consumed
+gifted
+sold
+lost
+```
+
+### Status changes and active locations
+
+When a bottle leaves the cellar, CellarMind does not delete its location history.
+
+Instead, it closes the active location row:
+
+```text
+ended_at = CURRENT_TIMESTAMP
+```
+
 ## DrinkWindow
 
 A `DrinkWindow` represents the estimated maturity window of a `WineVariant`.
@@ -662,7 +687,7 @@ For example:
 
 - consumed bottles should be marked as `consumed`;
 - sold bottles should be marked as `sold`;
-- broken bottles should be marked as `broken`.
+- lost bottles should be marked as `lost`.
 
 Hard deletion may exist for development or explicit cleanup, but normal user actions should preserve history.
 

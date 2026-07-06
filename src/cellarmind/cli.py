@@ -11,6 +11,7 @@ from cellarmind.importing.sqlite_importer import import_csv_to_database
 from cellarmind.infrastructure.csv_inspector import inspect_csv
 from cellarmind.storage.audit import AuditBreakdownRow, audit_database
 from cellarmind.storage.bottle_movement import move_bottle
+from cellarmind.storage.bottle_status import update_bottle_status
 from cellarmind.storage.inventory import list_bottles
 from cellarmind.storage.sqlite import initialize_database
 from cellarmind.storage.stats import get_database_stats
@@ -349,6 +350,71 @@ def move_bottle_command(
         )
 
 
+@bottle_app.command("mark-opened")
+def mark_bottle_opened(
+    bottle_id: int,
+    database: BottleDatabasePathOption = DEFAULT_DATABASE_PATH,
+) -> None:
+    """Mark a physical bottle as opened."""
+    _mark_bottle_status(
+        database=database,
+        bottle_id=bottle_id,
+        status="opened",
+    )
+
+
+@bottle_app.command("mark-consumed")
+def mark_bottle_consumed(
+    bottle_id: int,
+    database: BottleDatabasePathOption = DEFAULT_DATABASE_PATH,
+) -> None:
+    """Mark a physical bottle as consumed and remove it from active location."""
+    _mark_bottle_status(
+        database=database,
+        bottle_id=bottle_id,
+        status="consumed",
+    )
+
+
+@bottle_app.command("mark-gifted")
+def mark_bottle_gifted(
+    bottle_id: int,
+    database: BottleDatabasePathOption = DEFAULT_DATABASE_PATH,
+) -> None:
+    """Mark a physical bottle as gifted and remove it from active location."""
+    _mark_bottle_status(
+        database=database,
+        bottle_id=bottle_id,
+        status="gifted",
+    )
+
+
+@bottle_app.command("mark-sold")
+def mark_bottle_sold(
+    bottle_id: int,
+    database: BottleDatabasePathOption = DEFAULT_DATABASE_PATH,
+) -> None:
+    """Mark a physical bottle as sold and remove it from active location."""
+    _mark_bottle_status(
+        database=database,
+        bottle_id=bottle_id,
+        status="sold",
+    )
+
+
+@bottle_app.command("mark-lost")
+def mark_bottle_lost(
+    bottle_id: int,
+    database: BottleDatabasePathOption = DEFAULT_DATABASE_PATH,
+) -> None:
+    """Mark a physical bottle as lost and remove it from active location."""
+    _mark_bottle_status(
+        database=database,
+        bottle_id=bottle_id,
+        status="lost",
+    )
+
+
 def _print_audit_summary(report) -> None:
     summary = report.summary
 
@@ -388,3 +454,34 @@ def _print_audit_breakdown(
         table.add_row(row.label, str(row.bottle_count))
 
     console.print(table)
+
+
+def _mark_bottle_status(
+    *,
+    database: Path,
+    bottle_id: int,
+    status: str,
+) -> None:
+    try:
+        result = update_bottle_status(
+            database,
+            bottle_id=bottle_id,
+            new_status=status,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+
+    if result.changed:
+        console.print(
+            f"Bottle {result.bottle_id} status changed from "
+            f"{result.previous_status} to {result.new_status}."
+        )
+    else:
+        console.print(f"Bottle {result.bottle_id} is already marked as {result.new_status}.")
+
+    if result.closed_location_history_rows:
+        console.print("Closed active location.")
