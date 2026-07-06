@@ -499,6 +499,16 @@ The command stores the source URL and extracted evidence in
 The default mode is dry-run. CellarMind does not silently modify personal
 drinking windows.
 
+## Search online reference-window sources
+
+CellarMind can search for source pages related to a wine.
+
+```bash
+uv run cellarmind reference-window search \
+  --database data/cellarmind.sqlite \
+  --wine-id 123
+```
+
 ## Development
 
 Run the full local check suite:

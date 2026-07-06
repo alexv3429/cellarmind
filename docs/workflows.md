@@ -315,3 +315,13 @@ uv run cellarmind reference-window fetch \
 
 The fetched window is stored as reference evidence. It does not replace the
 personal drinking window.
+
+## Search online reference-window sources
+
+CellarMind can search for source pages related to a wine.
+
+```bash
+uv run cellarmind reference-window search \
+  --database data/cellarmind.sqlite \
+  --wine-id 123
+```
