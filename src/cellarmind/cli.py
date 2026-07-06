@@ -12,6 +12,7 @@ from cellarmind.infrastructure.csv_inspector import inspect_csv
 from cellarmind.storage.audit import AuditBreakdownRow, audit_database
 from cellarmind.storage.bottle_movement import move_bottle
 from cellarmind.storage.bottle_status import update_bottle_status
+from cellarmind.storage.cellars import list_cellars, update_cellar_profile
 from cellarmind.storage.inventory import list_bottles
 from cellarmind.storage.sqlite import initialize_database
 from cellarmind.storage.stats import get_database_stats
@@ -61,6 +62,34 @@ BottleDatabasePathOption = Annotated[
 ]
 CellarNameOption = Annotated[str, typer.Option("--cellar", help="Target cellar name.")]
 LocationNameOption = Annotated[str, typer.Option("--location", help="Target location name.")]
+CellarPurposeOption = Annotated[
+    str | None,
+    typer.Option(
+        "--purpose",
+        help="Cellar purpose (aging, drinking, mixed, staging, overflow, other).",
+    ),
+]
+CapacityEstimateOption = Annotated[
+    int | None,
+    typer.Option(
+        "--capacity-estimate",
+        help="Estimated capacity of the cellar (number of bottles).",
+    ),
+]
+CapacityWarningThresholdOption = Annotated[
+    int | None,
+    typer.Option(
+        "--capacity-warning-threshold",
+        help="Capacity warning threshold (number of bottles).",
+    ),
+]
+CellarNotesOption = Annotated[
+    str | None,
+    typer.Option(
+        "--notes",
+        help="Optional notes for the cellar.",
+    ),
+]
 
 app = typer.Typer(help="CellarMind: wine cellar enrichment and maturity analysis.")
 db_app = typer.Typer(help="Manage the CellarMind SQLite database.")
@@ -69,6 +98,8 @@ list_app = typer.Typer(help="List cellar contents.")
 app.add_typer(list_app, name="list")
 bottle_app = typer.Typer(help="Manage physical bottles.")
 app.add_typer(bottle_app, name="bottle")
+cellar_app = typer.Typer(help="Manage cellar profiles.")
+app.add_typer(cellar_app, name="cellar")
 console = Console(width=160)
 
 
@@ -413,6 +444,67 @@ def mark_bottle_lost(
         bottle_id=bottle_id,
         status="lost",
     )
+
+
+@cellar_app.command("list")
+def list_cellar_profiles(
+    database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+) -> None:
+    """List cellar profiles and approximate occupancy."""
+    try:
+        cellars = list_cellars(database)
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+
+    table = Table(title="Cellars", expand=False)
+    table.add_column("Name", no_wrap=True)
+    table.add_column("Purpose", no_wrap=True)
+    table.add_column("Bottles", justify="right", no_wrap=True)
+    table.add_column("Capacity", justify="right", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Notes", no_wrap=True)
+
+    for cellar in cellars:
+        table.add_row(
+            cellar.name,
+            cellar.purpose,
+            str(cellar.active_bottles),
+            (str(cellar.capacity_estimate) if cellar.capacity_estimate is not None else ""),
+            cellar.occupancy_status,
+            cellar.notes or "",
+        )
+
+    console.print(table)
+
+
+@cellar_app.command("update")
+def update_cellar(
+    name: str,
+    database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+    purpose: CellarPurposeOption = None,
+    capacity_estimate: CapacityEstimateOption = None,
+    capacity_warning_threshold: CapacityWarningThresholdOption = None,
+    notes: CellarNotesOption = None,
+) -> None:
+    """Create or update a cellar profile."""
+    try:
+        update_cellar_profile(
+            database,
+            name=name,
+            purpose=purpose,
+            capacity_estimate=capacity_estimate,
+            capacity_warning_threshold=capacity_warning_threshold,
+            notes=notes,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+    console.print(f"Updated cellar: {name}")
 
 
 def _print_audit_summary(report) -> None:

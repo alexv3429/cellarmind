@@ -336,6 +336,28 @@ updated_at
 
 A user may have multiple cellars.
 
+### Cellar profile
+
+A cellar has a functional profile:
+
+```text
+purpose
+capacity_estimate
+capacity_warning_threshold
+notes
+```
+
+And the following purposes are suported:
+
+```text
+aging
+drinking
+mixed
+staging
+overflow
+other
+```
+
 ## Location
 
 A `Location` represents a place inside a cellar.

@@ -139,6 +139,38 @@ uv run cellarmind import data/cave.csv \
 
 Without a cellar map, CellarMind uses a generic default cellar when a location is present but no cellar is explicitly provided.
 
+## Cellar profiles
+
+Cellars can have a functional purpose and approximate capacity.
+
+List cellars:
+
+```bash
+uv run cellarmind cellar list --database data/cellarmind.sqlite
+```
+
+Update cellar profile:
+
+```bash
+uv run cellarmind cellar update "Main cellar" \
+  --database data/cellarmind.sqlite \
+  --purpose aging \
+  --capacity-estimate 350 \
+  --capacity-warning-threshold 330 \
+  --notes "Main long-term aging cellar"
+```
+
+Supported cellar purposes are:
+
+```text
+aging
+drinking
+mixed
+staging
+overflow
+other
+```
+
 ## SQLite workflow
 
 Initialize a database:

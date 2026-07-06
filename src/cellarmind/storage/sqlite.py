@@ -83,9 +83,28 @@ CREATE TABLE IF NOT EXISTS bottle (
 CREATE TABLE IF NOT EXISTS cellar (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
+    purpose TEXT NOT NULL DEFAULT 'mixed',
+    capacity_estimate INTEGER,
+    capacity_warning_threshold INTEGER,
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (
+        purpose IN (
+            'aging',
+            'drinking',
+            'mixed',
+            'staging',
+            'overflow',
+            'other'
+        )
+    ),
+    CHECK (
+        capacity_estimate IS NULL OR capacity_estimate >= 0
+    ),
+    CHECK (
+        capacity_warning_threshold IS NULL OR capacity_warning_threshold >= 0
+    )
 );
 
 CREATE TABLE IF NOT EXISTS location (
