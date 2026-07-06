@@ -258,3 +258,22 @@ Typical actions are:
 - `review` for bottles with missing location or missing drinking-window data.
 
 The command is advisory and read-only.
+
+## Add reference drinking windows
+
+Reference drinking windows can be added manually.
+
+```bash
+uv run cellarmind reference-window add \
+  --database data/cellarmind.sqlite \
+  --wine-id 123 \
+  --source-name "Producer note" \
+  --source-url "https://example.com" \
+  --drink-from-year 2024 \
+  --drink-until-year 2032 \
+  --confidence medium \
+  --notes "Manual reference"
+```
+
+Reference windows are local data. This command does not fetch data from the
+internet and does not overwrite personal drinking windows.

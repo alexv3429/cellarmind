@@ -21,6 +21,11 @@ from cellarmind.storage.drinking_recommendation import (
 from cellarmind.storage.drinking_window import DrinkingWindowBottle, report_drinking_windows
 from cellarmind.storage.inventory import list_bottles
 from cellarmind.storage.placement import PlacementIssue, audit_placement
+from cellarmind.storage.reference_windows import (
+    ReferenceDrinkingWindow,
+    add_reference_window,
+    list_reference_windows,
+)
 from cellarmind.storage.sqlite import initialize_database
 from cellarmind.storage.stats import get_database_stats
 from cellarmind.storage.transfer_plan import TransferSuggestion, plan_transfers
@@ -186,6 +191,72 @@ ReportLimitOption = Annotated[
     ),
 ]
 
+ReferenceWineIdOption = Annotated[
+    int,
+    typer.Option(
+        "--wine-id",
+        min=1,
+        help="Wine ID linked to the reference drinking window.",
+    ),
+]
+
+OptionalReferenceWineIdOption = Annotated[
+    int | None,
+    typer.Option(
+        "--wine-id",
+        min=1,
+        help="Optional wine ID filter.",
+    ),
+]
+
+ReferenceSourceNameOption = Annotated[
+    str,
+    typer.Option(
+        "--source-name",
+        help="Name of the reference source.",
+    ),
+]
+
+ReferenceSourceUrlOption = Annotated[
+    str | None,
+    typer.Option(
+        "--source-url",
+        help="Optional source URL.",
+    ),
+]
+
+ReferenceDrinkFromYearOption = Annotated[
+    int | None,
+    typer.Option(
+        "--drink-from-year",
+        help="Reference drink-from year.",
+    ),
+]
+
+ReferenceDrinkUntilYearOption = Annotated[
+    int | None,
+    typer.Option(
+        "--drink-until-year",
+        help="Reference drink-until year.",
+    ),
+]
+
+ReferenceConfidenceOption = Annotated[
+    str,
+    typer.Option(
+        "--confidence",
+        help="Confidence: low, medium, high.",
+    ),
+]
+
+ReferenceNotesOption = Annotated[
+    str | None,
+    typer.Option(
+        "--notes",
+        help="Optional notes about the reference.",
+    ),
+]
+
 app = typer.Typer(help="CellarMind: wine cellar enrichment and maturity analysis.")
 db_app = typer.Typer(help="Manage the CellarMind SQLite database.")
 app.add_typer(db_app, name="db")
@@ -201,6 +272,8 @@ plan_app = typer.Typer(help="Generate cellar transfer plans.")
 app.add_typer(plan_app, name="plan")
 recommend_app = typer.Typer(help="Generate drinking recommendations.")
 app.add_typer(recommend_app, name="recommend")
+reference_window_app = typer.Typer(help="Manage reference drinking windows.")
+app.add_typer(reference_window_app, name="reference-window")
 console = Console(width=160)
 
 
@@ -742,6 +815,58 @@ def recommend_drinking_command(
     _print_drinking_recommendations(report.recommendations)
 
 
+@reference_window_app.command("add")
+def add_reference_window_command(
+    wine_id: ReferenceWineIdOption,
+    source_name: ReferenceSourceNameOption,
+    database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+    source_url: ReferenceSourceUrlOption = None,
+    drink_from_year: ReferenceDrinkFromYearOption = None,
+    drink_until_year: ReferenceDrinkUntilYearOption = None,
+    confidence: ReferenceConfidenceOption = "medium",
+    notes: ReferenceNotesOption = None,
+) -> None:
+    """Add a reference drinking window for a wine."""
+    try:
+        window = add_reference_window(
+            database,
+            wine_id=wine_id,
+            source_name=source_name,
+            source_url=source_url,
+            drink_from_year=drink_from_year,
+            drink_until_year=drink_until_year,
+            confidence=confidence,
+            notes=notes,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+    console.print(f"Created reference drinking window {window.id} for wine {window.wine_id}.")
+
+
+@reference_window_app.command("list")
+def list_reference_window_command(
+    database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+    wine_id: OptionalReferenceWineIdOption = None,
+) -> None:
+    """List reference drinking windows."""
+    try:
+        windows = list_reference_windows(
+            database,
+            wine_id=wine_id,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+    _print_reference_windows(windows)
+
+
 def _print_audit_summary(report) -> None:
     summary = report.summary
 
@@ -1149,3 +1274,40 @@ def _format_drinking_recommendation_cellar(
         return f"{recommendation.cellar} ({recommendation.cellar_purpose})"
 
     return f"{recommendation.cellar} / {recommendation.location} ({recommendation.cellar_purpose})"
+
+
+def _print_reference_windows(
+    windows: tuple[ReferenceDrinkingWindow, ...],
+) -> None:
+    if not windows:
+        console.print("No reference drinking windows found.")
+        return
+
+    table = Table(title="Reference drinking windows", expand=False)
+    table.add_column("ID", justify="right", no_wrap=True)
+    table.add_column("Wine", justify="right", no_wrap=True)
+    table.add_column("Source", overflow="fold", max_width=28)
+    table.add_column("Window", no_wrap=True)
+    table.add_column("Confidence", no_wrap=True)
+    table.add_column("URL", overflow="fold", max_width=32)
+    table.add_column("Notes", overflow="fold", max_width=40)
+
+    for window in windows:
+        table.add_row(
+            str(window.id),
+            str(window.wine_id),
+            window.source_name,
+            _format_reference_window(window),
+            window.confidence,
+            window.source_url or "",
+            window.notes or "",
+        )
+
+    console.print(table)
+
+
+def _format_reference_window(window: ReferenceDrinkingWindow) -> str:
+    from_year = str(window.drink_from_year) if window.drink_from_year is not None else "?"
+    until_year = str(window.drink_until_year) if window.drink_until_year is not None else "?"
+
+    return f"{from_year}-{until_year}"

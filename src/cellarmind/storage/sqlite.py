@@ -12,6 +12,7 @@ EXPECTED_TABLES: tuple[str, ...] = (
     "wine_variant",
     "bottle",
     "cellar",
+    "reference_drinking_window",
     "location",
     "bottle_location_history",
 )
@@ -78,6 +79,32 @@ CREATE TABLE IF NOT EXISTS bottle (
     ),
     FOREIGN KEY (wine_variant_id) REFERENCES wine_variant (id) ON DELETE RESTRICT,
     FOREIGN KEY (import_session_id) REFERENCES import_session (id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS reference_drinking_window (
+    id INTEGER PRIMARY KEY,
+    wine_id INTEGER NOT NULL,
+    source_name TEXT NOT NULL CHECK (trim(source_name) != ''),
+    source_url TEXT,
+    drink_from_year INTEGER,
+    drink_until_year INTEGER,
+    confidence TEXT NOT NULL DEFAULT 'medium'
+        CHECK (confidence IN ('low', 'medium', 'high')),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (wine_id) REFERENCES wine(id),
+
+    CHECK (
+        drink_from_year IS NOT NULL
+        OR drink_until_year IS NOT NULL
+    ),
+
+    CHECK (
+        drink_from_year IS NULL
+        OR drink_until_year IS NULL
+        OR drink_from_year <= drink_until_year
+    )
 );
 
 CREATE TABLE IF NOT EXISTS cellar (

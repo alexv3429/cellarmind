@@ -70,5 +70,8 @@ uv run cellarmind report drinking-window --database "$DATABASE_PATH" --year 2026
 echo "==> Drinking recommendations"
 uv run cellarmind recommend drinking --database "$DATABASE_PATH" --year 2026 --limit 10
 
+echo "==> Listing reference drinking windows"
+uv run cellarmind reference-window list --database "$DATABASE_PATH"
+
 echo
 echo "Pre-merge checks passed."
