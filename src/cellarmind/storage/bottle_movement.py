@@ -28,7 +28,6 @@ def move_bottle(
     cellar_name: str,
     location_name: str,
 ) -> BottleMoveResult:
-    print("Enter function")
     if not database_path.exists():
         raise FileNotFoundError(f"Database does not exist: {database_path}")
 
@@ -40,8 +39,6 @@ def move_bottle(
 
     if not normalized_location_name:
         raise ValueError("Location name is required.")
-
-    print("Connecting")
 
     with connect_database(database_path) as connection:
         _ensure_bottle_exists(connection, bottle_id)

@@ -411,6 +411,20 @@ Bottle 123
 
 Only one active location should exist for a bottle at a given time.
 
+### Moving bottles
+
+Bottle movement is represented by location history.
+
+When a bottle moves, CellarMind does not update a `location_id` directly on the
+`bottle` table. Instead it closes the current active `BottleLocationHistory` row
+by setting `ended_at`, then inserts a new active row for the target location.
+
+A bottle should have at most one active location history row, identified by:
+
+```text
+ended_at IS NULL
+```
+
 ## DrinkWindow
 
 A `DrinkWindow` represents the estimated maturity window of a `WineVariant`.
