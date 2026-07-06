@@ -21,6 +21,10 @@ from cellarmind.storage.drinking_recommendation import (
 from cellarmind.storage.drinking_window import DrinkingWindowBottle, report_drinking_windows
 from cellarmind.storage.inventory import list_bottles
 from cellarmind.storage.placement import PlacementIssue, audit_placement
+from cellarmind.storage.reference_window_search import (
+    ReferenceWindowSearchReport,
+    search_reference_window_sources,
+)
 from cellarmind.storage.reference_windows import (
     ReferenceDrinkingWindow,
     add_reference_window,
@@ -307,6 +311,24 @@ ComparisonToleranceYearsOption = Annotated[
         "-t",
         min=0,
         help="Allowed year difference before reporting a large disagreement.",
+    ),
+]
+
+ReferenceSearchLimitOption = Annotated[
+    int,
+    typer.Option(
+        "--limit",
+        "-l",
+        min=1,
+        help="Maximum number of search results.",
+    ),
+]
+
+FetchReferenceCandidatesOption = Annotated[
+    bool,
+    typer.Option(
+        "--fetch/--no-fetch",
+        help="Fetch result pages and try to extract drinking-window candidates.",
     ),
 ]
 
@@ -989,6 +1011,32 @@ def fetch_reference_window_command(
     console.print(f"Saved reference drinking window {window.id} for wine {window.wine_id}.")
 
 
+@reference_window_app.command("search")
+def search_reference_window_command(
+    wine_id: ReferenceWineIdOption,
+    database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+    limit: ReferenceSearchLimitOption = 5,
+    fetch: FetchReferenceCandidatesOption = False,
+    timeout_seconds: ReferenceFetchTimeoutOption = 15.0,
+) -> None:
+    """Search online sources for reference drinking windows."""
+    try:
+        report = search_reference_window_sources(
+            database,
+            wine_id=wine_id,
+            limit=limit,
+            fetch_candidates=fetch,
+            timeout_seconds=timeout_seconds,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+    _print_reference_window_search_report(report)
+
+
 def _print_audit_summary(report) -> None:
     summary = report.summary
 
@@ -1545,3 +1593,41 @@ def _format_reference_window_candidate(
     until_year = str(candidate.drink_until_year) if candidate.drink_until_year is not None else "?"
 
     return f"{from_year}-{until_year}"
+
+
+def _print_reference_window_search_report(
+    report: ReferenceWindowSearchReport,
+) -> None:
+    console.print(f"Wine: {report.wine.producer} — {report.wine.cuvee} {report.wine.vintage}")
+    console.print(f"Query: {report.query}")
+
+    if not report.results:
+        console.print("No search results found.")
+        return
+
+    table = Table(title="Reference-window source search", expand=False)
+    table.add_column("#", justify="right", no_wrap=True)
+    table.add_column("Title", overflow="fold", max_width=36)
+    table.add_column("URL", overflow="fold", max_width=48)
+    table.add_column("Candidate", no_wrap=True)
+    table.add_column("Confidence", no_wrap=True)
+    table.add_column("Error", overflow="fold", max_width=40)
+
+    for index, result in enumerate(report.results, start=1):
+        if result.candidate is None:
+            candidate_window = ""
+            confidence = ""
+        else:
+            candidate_window = _format_reference_window_candidate(result.candidate)
+            confidence = result.candidate.confidence
+
+        table.add_row(
+            str(index),
+            result.title,
+            result.url,
+            candidate_window,
+            confidence,
+            result.error or "",
+        )
+
+    console.print(table)
