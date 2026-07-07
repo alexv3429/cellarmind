@@ -4,8 +4,10 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, quote_plus, urlparse
+from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
+
+from ddgs import DDGS
 
 from cellarmind.storage.reference_windows_fetcher import (
     ReferenceWindowCandidate,
@@ -47,6 +49,7 @@ def search_reference_window_sources(
     limit: int = 5,
     fetch_candidates: bool = False,
     timeout_seconds: float = 15.0,
+    query_override: str | None = None,
 ) -> ReferenceWindowSearchReport:
     if not database_path.exists():
         raise FileNotFoundError(f"Database does not exist: {database_path}")
@@ -57,7 +60,11 @@ def search_reference_window_sources(
     with connect_database(database_path) as connection:
         wine = _get_wine_identity(connection, wine_id=wine_id)
 
-    query = build_reference_window_search_query(wine)
+    query = (
+        query_override.strip()
+        if query_override is not None and query_override.strip()
+        else build_reference_window_search_query(wine)
+    )
 
     raw_results = search_web_for_reference_sources(
         query=query,
@@ -123,39 +130,35 @@ def search_web_for_reference_sources(
     limit: int,
     timeout_seconds: float,
 ) -> tuple[_RawSearchResult, ...]:
-    search_url = f"https://duckduckgo.com/html/?q={quote_plus(query)}"
+    results: list[_RawSearchResult] = []
 
-    html = _fetch_search_html(
-        search_url,
-        timeout_seconds=timeout_seconds,
-    )
+    try:
+        with DDGS(timeout=timeout_seconds) as ddgs:
+            for result in ddgs.text(
+                query,
+                max_results=limit,
+            ):
+                title = str(result.get("title") or "").strip()
+                url = str(result.get("href") or result.get("url") or "").strip()
+                snippet = str(result.get("body") or "").strip() or None
 
-    parser = _DuckDuckGoHTMLParser()
-    parser.feed(html)
+                if not title or not url:
+                    continue
 
-    deduped: list[_RawSearchResult] = []
-    seen_urls: set[str] = set()
+                results.append(
+                    _RawSearchResult(
+                        title=title,
+                        url=url,
+                        snippet=snippet,
+                    )
+                )
 
-    for result in parser.results:
-        normalized_url = _normalize_result_url(result.url)
+                if len(results) >= limit:
+                    break
+    except Exception as error:
+        raise ValueError(f"Could not search online sources: {error}") from error
 
-        if not normalized_url or normalized_url in seen_urls:
-            continue
-
-        seen_urls.add(normalized_url)
-
-        deduped.append(
-            _RawSearchResult(
-                title=result.title,
-                url=normalized_url,
-                snippet=result.snippet,
-            )
-        )
-
-        if len(deduped) >= limit:
-            break
-
-    return tuple(deduped)
+    return tuple(results)
 
 
 def _get_wine_identity(connection, *, wine_id: int) -> WineSearchIdentity:
