@@ -298,6 +298,19 @@ Internet-extracted windows remain reference evidence. They do not overwrite
 `WineVariant.personal_drink_from_year` or
 `WineVariant.personal_drink_until_year`.
 
+### AI estimates
+
+AI drinking-window estimates are stored in `reference_drinking_window` as
+reference evidence.
+
+They use:
+
+```text
+source_name = "AI estimate (OpenAI)"
+source_url = NULL
+notes = model, rationale, and returned sources
+```
+
 ### Uniqueness
 
 A suggested uniqueness rule is:
