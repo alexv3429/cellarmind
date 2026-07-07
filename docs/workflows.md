@@ -279,6 +279,7 @@ uv run cellarmind reference-window estimate \
   --wine-id 123 \
   --provider ollama \
   --model llama3.1 \
+  --search-provider jina \
   --web-reader none
 ```
 

@@ -11,6 +11,7 @@ from urllib.request import Request, urlopen
 
 from openai import OpenAI, OpenAIError
 
+from cellarmind.storage.jina_search import search_jina_for_reference_sources
 from cellarmind.storage.reference_window_search import search_web_for_reference_sources
 from cellarmind.storage.reference_windows import (
     ReferenceDrinkingWindow,
@@ -33,6 +34,7 @@ DEFAULT_JINA_READER_BASE_URL = "https://r.jina.ai"
 VALID_CONFIDENCES = {"low", "medium", "high"}
 VALID_PROVIDERS = {"openai", "ollama"}
 VALID_WEB_READERS = {"jina", "none"}
+VALID_WEB_SEARCH_PROVIDERS = {"ddgs", "jina"}
 
 SEARCH_TIMEOUT_SECONDS = 20.0
 JINA_TIMEOUT_SECONDS = 30.0
@@ -88,6 +90,7 @@ class AIWindowEstimate:
     model: str
     web_search_enabled: bool
     web_search_used: bool
+    web_search_provider: str | None
     web_reader: str | None
     drink_from_year: int | None
     drink_until_year: int | None
@@ -106,6 +109,7 @@ def estimate_ai_drinking_window(
     model: str | None = None,
     use_web_search: bool = True,
     web_reader: str = "jina",
+    web_search_provider: str = "ddgs",
     evidence_limit: int = 5,
     ollama_host: str | None = None,
 ) -> AIWindowEstimate:
@@ -115,6 +119,7 @@ def estimate_ai_drinking_window(
     resolved_provider = _normalize_provider(provider)
     resolved_model = _resolve_model(model, provider=resolved_provider)
     resolved_web_reader = _normalize_web_reader(web_reader)
+    resolved_web_search_provider = _normalize_web_search_provider(web_search_provider)
 
     with connect_database(database_path) as connection:
         wine = _get_wine_identity(connection, wine_id=wine_id)
@@ -133,6 +138,7 @@ def estimate_ai_drinking_window(
                 wine=wine,
                 limit=evidence_limit,
                 web_reader=resolved_web_reader,
+                web_search_provider=resolved_web_search_provider,
             )
 
             if not evidence:
@@ -153,6 +159,11 @@ def estimate_ai_drinking_window(
         provider=resolved_provider,
         model=resolved_model,
         use_web_search=use_web_search,
+        web_search_provider=(
+            resolved_web_search_provider
+            if resolved_provider == "ollama" and use_web_search
+            else None
+        ),
         web_reader=resolved_web_reader if resolved_provider == "ollama" else None,
         evidence=evidence,
         provider_response=provider_response,
@@ -167,6 +178,7 @@ def estimate_and_add_ai_reference_window(
     model: str | None = None,
     use_web_search: bool = True,
     web_reader: str = "jina",
+    web_search_provider: str = "ddgs",
     evidence_limit: int = 5,
     ollama_host: str | None = None,
 ) -> ReferenceDrinkingWindow:
@@ -177,6 +189,7 @@ def estimate_and_add_ai_reference_window(
         model=model,
         use_web_search=use_web_search,
         web_reader=web_reader,
+        web_search_provider=web_search_provider,
         evidence_limit=evidence_limit,
         ollama_host=ollama_host,
     )
@@ -218,6 +231,15 @@ def _normalize_web_reader(web_reader: str) -> str:
 
     if normalized not in VALID_WEB_READERS:
         raise ValueError("AI web reader must be one of: jina, none.")
+
+    return normalized
+
+
+def _normalize_web_search_provider(web_search_provider: str) -> str:
+    normalized = web_search_provider.strip().lower()
+
+    if normalized not in VALID_WEB_SEARCH_PROVIDERS:
+        raise ValueError("AI web search provider must be one of: ddgs, jina.")
 
     return normalized
 
@@ -403,13 +425,15 @@ def _gather_web_evidence(
     wine: WineIdentity,
     limit: int,
     web_reader: str,
+    web_search_provider: str,
 ) -> tuple[AIWindowEvidence, ...]:
     query = _search_query_for_wine(wine)
-    raw_results = search_web_for_reference_sources(
+    raw_results = _search_results_for_ai_evidence(
         query=query,
         limit=limit,
-        timeout_seconds=SEARCH_TIMEOUT_SECONDS,
+        web_search_provider=web_search_provider,
     )
+    raw_results = _rank_search_results(wine=wine, results=raw_results)
 
     evidence: list[AIWindowEvidence] = []
     total_chars = 0
@@ -443,6 +467,86 @@ def _gather_web_evidence(
             break
 
     return tuple(evidence)
+
+
+def _search_results_for_ai_evidence(
+    *,
+    query: str,
+    limit: int,
+    web_search_provider: str,
+):
+    if web_search_provider == "ddgs":
+        return search_web_for_reference_sources(
+            query=query,
+            limit=limit,
+            timeout_seconds=SEARCH_TIMEOUT_SECONDS,
+        )
+
+    if web_search_provider == "jina":
+        return search_jina_for_reference_sources(
+            query=query,
+            limit=limit,
+            timeout_seconds=SEARCH_TIMEOUT_SECONDS,
+        )
+
+    raise ValueError(f"Unsupported AI web search provider: {web_search_provider}")
+
+
+def _rank_search_results(*, wine: WineIdentity, results):
+    return tuple(
+        sorted(
+            results,
+            key=lambda result: _score_search_result(wine=wine, result=result),
+            reverse=True,
+        )
+    )
+
+
+def _score_search_result(*, wine: WineIdentity, result) -> int:
+    searchable = " ".join(
+        part
+        for part in (
+            getattr(result, "title", ""),
+            getattr(result, "url", ""),
+            getattr(result, "snippet", "") or "",
+        )
+        if part
+    ).lower()
+
+    score = 0
+
+    for token in _wine_search_tokens(wine):
+        if token in searchable:
+            score += 10
+
+    if wine.vintage.lower() in searchable:
+        score += 20
+
+    if any(
+        term in searchable for term in ("drink", "drinking", "window", "until", "till", "maturity")
+    ):
+        score += 15
+
+    if "cellartracker.com" in searchable:
+        score -= 10
+
+    if "wine-searcher.com" in searchable:
+        score -= 5
+
+    return score
+
+
+def _wine_search_tokens(wine: WineIdentity) -> tuple[str, ...]:
+    raw_parts = (wine.producer, wine.cuvee, wine.appellation, wine.color)
+    tokens: list[str] = []
+
+    for part in raw_parts:
+        for token in part.lower().replace("-", " ").split():
+            normalized = token.strip(" ,.;:()[]{}\"'")
+            if len(normalized) >= 4:
+                tokens.append(normalized)
+
+    return tuple(dict.fromkeys(tokens))
 
 
 def _search_query_for_wine(wine: WineIdentity) -> str:
@@ -663,6 +767,7 @@ def _payload_to_estimate(
     provider: str,
     model: str,
     use_web_search: bool,
+    web_search_provider: str | None,
     web_reader: str | None,
     evidence: tuple[AIWindowEvidence, ...],
     provider_response: OpenAIEstimateResponse,
@@ -698,6 +803,7 @@ def _payload_to_estimate(
         model=model,
         web_search_enabled=use_web_search,
         web_search_used=provider_response.web_search_used,
+        web_search_provider=web_search_provider,
         web_reader=web_reader,
         drink_from_year=drink_from_year,
         drink_until_year=drink_until_year,
@@ -838,6 +944,7 @@ def _estimate_notes(estimate: AIWindowEstimate) -> str:
         f"Source name: {estimate.source_name}\n"
         f"Web search enabled: {estimate.web_search_enabled}\n"
         f"Web search used: {estimate.web_search_used}\n"
+        f"Web search provider: {estimate.web_search_provider or 'none'}\n"
         f"Web reader: {estimate.web_reader or 'none'}\n"
         f"{_format_usage_notes(estimate.usage)}"
         f"Rationale: {estimate.rationale}\n"
