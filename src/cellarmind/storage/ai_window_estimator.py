@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlite3 import Connection
 from typing import Any
 
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
 
 from cellarmind.storage.reference_windows import (
     ReferenceDrinkingWindow,
@@ -40,15 +40,32 @@ class AIWindowSource:
 
 
 @dataclass(frozen=True)
+class AIWindowUsage:
+    input_tokens: int | None
+    output_tokens: int | None
+    total_tokens: int | None
+
+
+@dataclass(frozen=True)
+class OpenAIEstimateResponse:
+    payload: dict[str, Any]
+    usage: AIWindowUsage | None
+    web_search_used: bool
+
+
+@dataclass(frozen=True)
 class AIWindowEstimate:
     wine: WineIdentity
     source_name: str
     model: str
+    web_search_enabled: bool
+    web_search_used: bool
     drink_from_year: int | None
     drink_until_year: int | None
     confidence: str
     rationale: str
     sources: tuple[AIWindowSource, ...]
+    usage: AIWindowUsage | None
 
 
 def estimate_ai_drinking_window(
@@ -66,7 +83,7 @@ def estimate_ai_drinking_window(
     with connect_database(database_path) as connection:
         wine = _get_wine_identity(connection, wine_id=wine_id)
 
-    payload = _call_openai_estimate(
+    openai_response = _call_openai_estimate(
         wine=wine,
         model=resolved_model,
         use_web_search=use_web_search,
@@ -75,7 +92,8 @@ def estimate_ai_drinking_window(
     return _payload_to_estimate(
         wine=wine,
         model=resolved_model,
-        payload=payload,
+        use_web_search=use_web_search,
+        openai_response=openai_response,
     )
 
 
@@ -93,9 +111,20 @@ def estimate_and_add_ai_reference_window(
         use_web_search=use_web_search,
     )
 
+    return add_ai_reference_window_from_estimate(
+        database_path,
+        estimate=estimate,
+    )
+
+
+def add_ai_reference_window_from_estimate(
+    database_path: Path,
+    *,
+    estimate: AIWindowEstimate,
+) -> ReferenceDrinkingWindow:
     return add_reference_window(
         database_path,
-        wine_id=wine_id,
+        wine_id=estimate.wine.wine_id,
         source_name=estimate.source_name,
         source_url=None,
         drink_from_year=estimate.drink_from_year,
@@ -151,7 +180,7 @@ def _call_openai_estimate(
     wine: WineIdentity,
     model: str,
     use_web_search: bool,
-) -> dict[str, Any]:
+) -> OpenAIEstimateResponse:
     if not os.environ.get(OPENAI_API_KEY_ENV):
         raise ValueError(
             "OPENAI_API_KEY is not set. Set it before using AI drinking-window estimates."
@@ -159,15 +188,11 @@ def _call_openai_estimate(
 
     client = OpenAI()
 
-    tools: list[dict[str, str]] = []
-    if use_web_search:
-        tools.append({"type": "web_search"})
-
-    response = client.responses.create(
-        model=model,
-        tools=tools,
-        input=_estimate_prompt(wine),
-        text={
+    request: dict[str, Any] = {
+        "model": model,
+        "tools": [],
+        "input": _estimate_prompt(wine, use_web_search=use_web_search),
+        "text": {
             "format": {
                 "type": "json_schema",
                 "name": "drinking_window_estimate",
@@ -175,12 +200,31 @@ def _call_openai_estimate(
                 "schema": _estimate_schema(),
             }
         },
+    }
+
+    if use_web_search:
+        request["tools"] = [{"type": "web_search"}]
+        request["tool_choice"] = "required"
+
+    try:
+        response = client.responses.create(**request)
+    except OpenAIError as error:
+        raise ValueError(f"OpenAI estimate failed: {error}") from error
+
+    return OpenAIEstimateResponse(
+        payload=json.loads(response.output_text),
+        usage=_response_usage(response),
+        web_search_used=_response_used_web_search(response),
     )
 
-    return json.loads(response.output_text)
 
+def _estimate_prompt(wine: WineIdentity, *, use_web_search: bool) -> str:
+    web_rule = (
+        "Use web search before answering. Prefer cited, source-backed information."
+        if use_web_search
+        else "Do not use web search. Estimate from general wine knowledge only."
+    )
 
-def _estimate_prompt(wine: WineIdentity) -> str:
     return f"""
 Estimate a drinking window for this wine.
 
@@ -194,7 +238,7 @@ Wine:
 Return only the structured JSON required by the schema.
 
 Rules:
-- Prefer cited, source-backed information.
+- {web_rule}
 - If sources disagree, choose a conservative practical cellar window.
 - If you are uncertain, use confidence "low".
 - Use null when a boundary cannot be estimated.
@@ -252,8 +296,11 @@ def _payload_to_estimate(
     *,
     wine: WineIdentity,
     model: str,
-    payload: dict[str, Any],
+    use_web_search: bool,
+    openai_response: OpenAIEstimateResponse,
 ) -> AIWindowEstimate:
+    payload = openai_response.payload
+
     drink_from_year = payload["drink_from_year"]
     drink_until_year = payload["drink_until_year"]
     confidence = str(payload["confidence"]).strip().lower()
@@ -263,6 +310,9 @@ def _payload_to_estimate(
         drink_until_year=drink_until_year,
     )
     _validate_confidence(confidence)
+
+    if use_web_search and not openai_response.web_search_used:
+        raise ValueError("OpenAI did not use web search even though web search was required.")
 
     sources = tuple(
         AIWindowSource(
@@ -277,11 +327,14 @@ def _payload_to_estimate(
         wine=wine,
         source_name="AI estimate (OpenAI)",
         model=model,
+        web_search_enabled=use_web_search,
+        web_search_used=openai_response.web_search_used,
         drink_from_year=drink_from_year,
         drink_until_year=drink_until_year,
         confidence=confidence,
         rationale=str(payload["rationale"]).strip(),
         sources=sources,
+        usage=openai_response.usage,
     )
 
 
@@ -321,6 +374,51 @@ def _optional_text(value: object) -> str | None:
     return normalized
 
 
+def _response_used_web_search(response: object) -> bool:
+    output = getattr(response, "output", None)
+
+    if output is None:
+        return False
+
+    return any(_get_output_item_type(item) == "web_search_call" for item in output)
+
+
+def _get_output_item_type(item: object) -> str | None:
+    value = item.get("type") if isinstance(item, dict) else getattr(item, "type", None)
+
+    if value is None:
+        return None
+
+    return str(value)
+
+
+def _response_usage(response: object) -> AIWindowUsage | None:
+    usage = getattr(response, "usage", None)
+
+    if usage is None:
+        return None
+
+    return AIWindowUsage(
+        input_tokens=_optional_int(_get_usage_value(usage, "input_tokens")),
+        output_tokens=_optional_int(_get_usage_value(usage, "output_tokens")),
+        total_tokens=_optional_int(_get_usage_value(usage, "total_tokens")),
+    )
+
+
+def _get_usage_value(usage: object, key: str) -> object:
+    if isinstance(usage, dict):
+        return usage.get(key)
+
+    return getattr(usage, key, None)
+
+
+def _optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+
+    return int(value)
+
+
 def _estimate_notes(estimate: AIWindowEstimate) -> str:
     source_lines = [
         _format_source_note(index, source) for index, source in enumerate(estimate.sources, start=1)
@@ -328,7 +426,27 @@ def _estimate_notes(estimate: AIWindowEstimate) -> str:
 
     sources_text = "\n".join(source_lines) if source_lines else "No sources returned."
 
-    return f"AI model: {estimate.model}\nRationale: {estimate.rationale}\nSources:\n{sources_text}"
+    return (
+        f"AI model: {estimate.model}\n"
+        "Provider: OpenAI\n"
+        f"Web search enabled: {estimate.web_search_enabled}\n"
+        f"Web search used: {estimate.web_search_used}\n"
+        f"{_format_usage_notes(estimate.usage)}"
+        f"Rationale: {estimate.rationale}\n"
+        f"Sources:\n{sources_text}"
+    )
+
+
+def _format_usage_notes(usage: AIWindowUsage | None) -> str:
+    if usage is None:
+        return "Usage: unavailable\n"
+
+    return (
+        "Usage: "
+        f"input_tokens={usage.input_tokens}, "
+        f"output_tokens={usage.output_tokens}, "
+        f"total_tokens={usage.total_tokens}\n"
+    )
 
 
 def _format_source_note(index: int, source: AIWindowSource) -> str:

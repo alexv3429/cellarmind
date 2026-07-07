@@ -11,8 +11,8 @@ from cellarmind.importing.sqlite_importer import import_csv_to_database
 from cellarmind.infrastructure.csv_inspector import inspect_csv
 from cellarmind.storage.ai_window_estimator import (
     AIWindowEstimate,
+    add_ai_reference_window_from_estimate,
     estimate_ai_drinking_window,
-    estimate_and_add_ai_reference_window,
 )
 from cellarmind.storage.audit import AuditBreakdownRow, audit_database
 from cellarmind.storage.bottle_addition import add_bottles
@@ -1146,11 +1146,9 @@ def estimate_reference_window_command(
         return
 
     try:
-        window = estimate_and_add_ai_reference_window(
+        window = add_ai_reference_window_from_estimate(
             database,
-            wine_id=wine_id,
-            model=model,
-            use_web_search=web_search,
+            estimate=estimate,
         )
     except FileNotFoundError as error:
         raise typer.BadParameter(str(error)) from error
@@ -1740,9 +1738,20 @@ def _print_ai_window_estimate(estimate: AIWindowEstimate) -> None:
         (f"{estimate.wine.producer} — {estimate.wine.cuvee} {estimate.wine.vintage}"),
     )
     table.add_row("Model", estimate.model)
+    table.add_row("Web search", _format_web_search_status(estimate))
     table.add_row("Window", _format_ai_estimate_window(estimate))
     table.add_row("Confidence", estimate.confidence)
     table.add_row("Rationale", estimate.rationale)
+
+    if estimate.usage is not None:
+        table.add_row(
+            "Usage",
+            (
+                f"input={estimate.usage.input_tokens or '?'} tokens, "
+                f"output={estimate.usage.output_tokens or '?'} tokens, "
+                f"total={estimate.usage.total_tokens or '?'} tokens"
+            ),
+        )
 
     console.print(table)
 
@@ -1762,6 +1771,16 @@ def _print_ai_window_estimate(estimate: AIWindowEstimate) -> None:
             )
 
         console.print(sources_table)
+
+
+def _format_web_search_status(estimate: AIWindowEstimate) -> str:
+    if not estimate.web_search_enabled:
+        return "disabled"
+
+    if estimate.web_search_used:
+        return "enabled, used"
+
+    return "enabled, not used"
 
 
 def _format_ai_estimate_window(estimate: AIWindowEstimate) -> str:
