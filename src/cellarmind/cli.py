@@ -1121,7 +1121,7 @@ AIProviderOption = Annotated[
     str,
     typer.Option(
         "--provider",
-        help="AI provider to use: openai or ollama.",
+        help="AI provider to use: openai, ollama, or gemini.",
     ),
 ]
 

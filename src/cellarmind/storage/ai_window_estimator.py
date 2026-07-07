@@ -28,11 +28,18 @@ OLLAMA_MODEL_ENV = "CELLARMIND_OLLAMA_MODEL"
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.1"
 
+GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
+GEMINI_MODEL_ENV = "CELLARMIND_GEMINI_MODEL"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_API_BASE_URL_ENV = "CELLARMIND_GEMINI_API_BASE_URL"
+DEFAULT_GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+GEMINI_TIMEOUT_SECONDS = 120.0
+
 JINA_READER_BASE_URL_ENV = "CELLARMIND_JINA_READER_BASE_URL"
 DEFAULT_JINA_READER_BASE_URL = "https://r.jina.ai"
 
 VALID_CONFIDENCES = {"low", "medium", "high"}
-VALID_PROVIDERS = {"openai", "ollama"}
+VALID_PROVIDERS = {"openai", "ollama", "gemini"}
 VALID_WEB_READERS = {"jina", "none"}
 VALID_WEB_SEARCH_PROVIDERS = {"ddgs", "jina"}
 
@@ -132,6 +139,12 @@ def estimate_ai_drinking_window(
             model=resolved_model,
             use_web_search=use_web_search,
         )
+    elif resolved_provider == "gemini":
+        provider_response = _call_gemini_estimate(
+            wine=wine,
+            model=resolved_model,
+            use_web_search=use_web_search,
+        )
     elif resolved_provider == "ollama":
         if use_web_search:
             evidence = _gather_web_evidence(
@@ -221,7 +234,7 @@ def _normalize_provider(provider: str) -> str:
     normalized = provider.strip().lower()
 
     if normalized not in VALID_PROVIDERS:
-        raise ValueError("AI provider must be one of: openai, ollama.")
+        raise ValueError("AI provider must be one of: openai, ollama, gemini.")
 
     return normalized
 
@@ -255,6 +268,14 @@ def _resolve_model(model: str | None, *, provider: str) -> str:
             return configured_model.strip()
 
         return DEFAULT_OPENAI_MODEL
+
+    if provider == "gemini":
+        configured_model = os.environ.get(GEMINI_MODEL_ENV)
+
+        if configured_model is not None and configured_model.strip():
+            return configured_model.strip()
+
+        return DEFAULT_GEMINI_MODEL
 
     configured_model = os.environ.get(OLLAMA_MODEL_ENV)
 
@@ -338,6 +359,129 @@ def _call_openai_estimate(
         payload=json.loads(response.output_text),
         usage=_response_usage(response),
         web_search_used=_response_used_web_search(response),
+    )
+
+
+def _call_gemini_estimate(
+    *,
+    wine: WineIdentity,
+    model: str,
+    use_web_search: bool,
+) -> OpenAIEstimateResponse:
+    api_key = os.environ.get(GEMINI_API_KEY_ENV)
+
+    if not api_key:
+        raise ValueError(
+            "GEMINI_API_KEY is not set. Set it before using Gemini drinking-window estimates."
+        )
+
+    url = _gemini_generate_content_url(model=model, api_key=api_key)
+    request_body: dict[str, Any] = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "text": _estimate_prompt(
+                            wine,
+                            provider="gemini",
+                            use_web_search=use_web_search,
+                            evidence=(),
+                        )
+                    }
+                ],
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.1,
+            "responseMimeType": "application/json",
+        },
+    }
+
+    if use_web_search:
+        request_body["tools"] = [{"googleSearch": {}}]
+
+    response = _post_json(
+        url,
+        request_body,
+        timeout_seconds=GEMINI_TIMEOUT_SECONDS,
+    )
+    text_output = _gemini_output_text(response)
+
+    try:
+        payload = json.loads(text_output)
+    except json.JSONDecodeError as error:
+        raise ValueError("Gemini response was not valid JSON.") from error
+
+    return OpenAIEstimateResponse(
+        payload=payload,
+        usage=_gemini_usage(response),
+        web_search_used=_gemini_used_google_search(response),
+    )
+
+
+def _gemini_generate_content_url(*, model: str, api_key: str) -> str:
+    base_url = os.environ.get(GEMINI_API_BASE_URL_ENV, DEFAULT_GEMINI_API_BASE_URL)
+    return f"{base_url.rstrip('/')}/models/{model}:generateContent?key={api_key}"
+
+
+def _gemini_output_text(response: dict[str, Any]) -> str:
+    candidates = response.get("candidates")
+
+    if not isinstance(candidates, list) or not candidates:
+        raise ValueError("Gemini response did not contain candidates.")
+
+    content = candidates[0].get("content")
+
+    if not isinstance(content, dict):
+        raise ValueError("Gemini response did not contain content.")
+
+    parts = content.get("parts")
+
+    if not isinstance(parts, list) or not parts:
+        raise ValueError("Gemini response did not contain text parts.")
+
+    text_parts = [part.get("text") for part in parts if isinstance(part, dict)]
+    text_output = "".join(part for part in text_parts if isinstance(part, str)).strip()
+
+    if not text_output:
+        raise ValueError("Gemini response did not contain JSON text.")
+
+    return text_output
+
+
+def _gemini_used_google_search(response: dict[str, Any]) -> bool:
+    candidates = response.get("candidates")
+
+    if not isinstance(candidates, list) or not candidates:
+        return False
+
+    metadata = candidates[0].get("groundingMetadata")
+
+    if not isinstance(metadata, dict):
+        return False
+
+    chunks = metadata.get("groundingChunks")
+    supports = metadata.get("groundingSupports")
+    queries = metadata.get("webSearchQueries")
+
+    return bool(chunks or supports or queries)
+
+
+def _gemini_usage(response: dict[str, Any]) -> AIWindowUsage | None:
+    usage = response.get("usageMetadata")
+
+    if not isinstance(usage, dict):
+        return None
+
+    input_tokens = _optional_int(usage.get("promptTokenCount"))
+    output_tokens = _optional_int(usage.get("candidatesTokenCount"))
+    total_tokens = _optional_int(usage.get("totalTokenCount"))
+
+    return AIWindowUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
     )
 
 
@@ -635,7 +779,7 @@ def _estimate_prompt(
 ) -> str:
     web_rule = (
         "Use web search before answering. Prefer cited, source-backed information."
-        if use_web_search and provider == "openai"
+        if use_web_search and provider in {"openai", "gemini"}
         else "Do not use web search. Estimate from general wine knowledge only."
     )
 
@@ -784,8 +928,15 @@ def _payload_to_estimate(
     )
     _validate_confidence(confidence)
 
-    if provider == "openai" and use_web_search and not provider_response.web_search_used:
-        raise ValueError("OpenAI did not use web search even though web search was required.")
+    if (
+        provider in {"openai", "gemini"}
+        and use_web_search
+        and not provider_response.web_search_used
+    ):
+        raise ValueError(
+            f"{_provider_display_name(provider)} did not use web search "
+            "even though web search was required."
+        )
 
     sources = tuple(
         AIWindowSource(
@@ -821,6 +972,9 @@ def _source_name_for_provider(provider: str) -> str:
 
     if provider == "ollama":
         return "AI estimate (local)"
+
+    if provider == "gemini":
+        return "AI estimate (Gemini)"
 
     raise ValueError(f"Unsupported AI provider: {provider}")
 
@@ -956,6 +1110,9 @@ def _estimate_notes(estimate: AIWindowEstimate) -> str:
 def _provider_display_name(provider: str) -> str:
     if provider == "openai":
         return "OpenAI"
+
+    if provider == "gemini":
+        return "Gemini"
 
     return provider
 
