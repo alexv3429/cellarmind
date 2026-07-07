@@ -71,7 +71,7 @@ def test_html_to_text_ignores_script_and_style() -> None:
 
 def test_fetch_reference_window_candidate_from_url(monkeypatch) -> None:
     def fake_fetch_url_text(
-        source_url: str, *, timeout_seconds: float, max_bytes: int = 2_000_000
+        source_url: str, *, timeout_seconds: float, max_bytes: int = 2_000_000, verify_tls=False
     ) -> str:
         return "<html><body>Drinking window 2024-2032.</body></html>"
 
@@ -95,7 +95,7 @@ def test_fetch_reference_window_candidate_from_url(monkeypatch) -> None:
 
 def test_fetch_reference_window_candidate_defaults_source_name(monkeypatch) -> None:
     def fake_fetch_url_text(
-        source_url: str, *, timeout_seconds: float, max_bytes: int = 2_000_000
+        source_url: str, *, timeout_seconds: float, max_bytes: int = 2_000_000, verify_tls=False
     ) -> str:
         return "<html><body>Drinking window 2024-2032.</body></html>"
 
@@ -116,7 +116,7 @@ def test_reference_window_fetch_command_dry_run(monkeypatch, tmp_path: Path) -> 
     wine_id = _get_wine_id(database_path, cuvee="Internet Wine")
 
     def fake_fetch_url_text(
-        source_url: str, *, timeout_seconds: float, max_bytes: int = 2_000_000
+        source_url: str, *, timeout_seconds: float, max_bytes: int = 2_000_000, verify_tls=False
     ) -> str:
         return "<html><body>Drinking window 2024-2032.</body></html>"
 
@@ -154,7 +154,7 @@ def test_reference_window_fetch_command_save(monkeypatch, tmp_path: Path) -> Non
     wine_id = _get_wine_id(database_path, cuvee="Internet Wine")
 
     def fake_fetch_url_text(
-        source_url: str, *, timeout_seconds: float, max_bytes: int = 2_000_000
+        source_url: str, *, timeout_seconds: float, max_bytes: int = 2_000_000, verify_tls=False
     ) -> str:
         return "<html><body>Drinking window 2024-2032.</body></html>"
 
@@ -240,6 +240,7 @@ def test_reference_window_fetch_command_save_uses_extracted_confidence(
         *,
         timeout_seconds: float,
         max_bytes: int = 2_000_000,
+        verify_tls=False,
     ) -> str:
         return "A boire jusqu'à 2030."
 

@@ -1,11 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from html.parser import HTMLParser
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, urlparse
-from urllib.request import Request, urlopen
 
 from ddgs import DDGS
 
@@ -130,6 +126,19 @@ def search_web_for_reference_sources(
     limit: int,
     timeout_seconds: float,
 ) -> tuple[_RawSearchResult, ...]:
+    return _search_ddgs(
+        query=query,
+        limit=limit,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def _search_ddgs(
+    *,
+    query: str,
+    limit: int,
+    timeout_seconds: float,
+) -> tuple[_RawSearchResult, ...]:
     results: list[_RawSearchResult] = []
 
     try:
@@ -188,92 +197,3 @@ def _get_wine_identity(connection, *, wine_id: int) -> WineSearchIdentity:
         appellation=row["appellation"],
         color=row["color"],
     )
-
-
-def _fetch_search_html(
-    url: str,
-    *,
-    timeout_seconds: float,
-) -> str:
-    request = Request(
-        url,
-        headers={
-            "User-Agent": ("CellarMind/0.1 (reference-window source search; manual user request)")
-        },
-    )
-
-    try:
-        with urlopen(request, timeout=timeout_seconds) as response:
-            charset = response.headers.get_content_charset() or "utf-8"
-            return response.read(1_000_000).decode(charset, errors="replace")
-    except HTTPError as error:
-        raise ValueError(f"Could not search online sources: HTTP {error.code}") from error
-    except URLError as error:
-        raise ValueError(f"Could not search online sources: {error.reason}") from error
-    except TimeoutError as error:
-        raise ValueError("Could not search online sources: request timed out.") from error
-
-
-def _normalize_result_url(url: str) -> str | None:
-    if not url:
-        return None
-
-    if url.startswith("/l/"):
-        return _normalize_result_url(f"https://duckduckgo.com{url}")
-
-    if url.startswith("//duckduckgo.com/l/"):
-        return _normalize_result_url(f"https:{url}")
-
-    parsed = urlparse(url)
-
-    if parsed.netloc.endswith("duckduckgo.com") and parsed.path.startswith("/l/"):
-        params = parse_qs(parsed.query)
-        target = params.get("uddg", [None])[0]
-
-        if target:
-            return target
-
-        return None
-
-    if parsed.scheme in {"http", "https"} and parsed.netloc:
-        return url
-
-    return None
-
-
-class _DuckDuckGoHTMLParser(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.results: list[_RawSearchResult] = []
-        self._in_result_link = False
-        self._current_href: str | None = None
-        self._current_title_parts: list[str] = []
-
-    def handle_starttag(self, tag: str, attrs) -> None:
-        attrs_dict = dict(attrs)
-
-        if tag == "a" and "result__a" in attrs_dict.get("class", ""):
-            self._in_result_link = True
-            self._current_href = attrs_dict.get("href")
-            self._current_title_parts = []
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag == "a" and self._in_result_link:
-            title = " ".join(self._current_title_parts).strip()
-
-            if title and self._current_href:
-                self.results.append(
-                    _RawSearchResult(
-                        title=title,
-                        url=self._current_href,
-                        snippet=None,
-                    )
-                )
-
-            self._in_result_link = False
-            self._current_href = None
-            self._current_title_parts = []
-
-    def handle_data(self, data: str) -> None:
-        if self._in_result_link and data.strip():
-            self._current_title_parts.append(data.strip())
