@@ -1117,12 +1117,52 @@ def _print_audit_summary(report) -> None:
     console.print(table)
 
 
+AIProviderOption = Annotated[
+    str,
+    typer.Option(
+        "--provider",
+        help="AI provider to use: openai or ollama.",
+    ),
+]
+
+AIWebReaderOption = Annotated[
+    str,
+    typer.Option(
+        "--web-reader",
+        help="Web reader for local AI estimates: jina or none.",
+    ),
+]
+
+AIEvidenceLimitOption = Annotated[
+    int,
+    typer.Option(
+        "--evidence-limit",
+        min=1,
+        max=10,
+        help="Maximum number of web evidence sources to gather for local AI estimates.",
+    ),
+]
+
+OllamaHostOption = Annotated[
+    str | None,
+    typer.Option(
+        "--ollama-host",
+        help=("Ollama host URL. Defaults to CELLARMIND_OLLAMA_HOST or http://localhost:11434."),
+    ),
+]
+
+
+@reference_window_app.command("estimate")
 @reference_window_app.command("estimate")
 def estimate_reference_window_command(
     wine_id: ReferenceWineIdOption,
     database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+    provider: AIProviderOption = "openai",
     model: AIModelOption = None,
     web_search: AIWebSearchOption = True,
+    web_reader: AIWebReaderOption = "jina",
+    evidence_limit: AIEvidenceLimitOption = 5,
+    ollama_host: OllamaHostOption = None,
     save: SaveAIEstimateOption = False,
 ) -> None:
     """Estimate a drinking window with AI."""
@@ -1130,8 +1170,12 @@ def estimate_reference_window_command(
         estimate = estimate_ai_drinking_window(
             database,
             wine_id=wine_id,
+            provider=provider,
             model=model,
             use_web_search=web_search,
+            web_reader=web_reader,
+            evidence_limit=evidence_limit,
+            ollama_host=ollama_host,
         )
     except FileNotFoundError as error:
         raise typer.BadParameter(str(error)) from error
@@ -1737,8 +1781,11 @@ def _print_ai_window_estimate(estimate: AIWindowEstimate) -> None:
         "Wine",
         (f"{estimate.wine.producer} — {estimate.wine.cuvee} {estimate.wine.vintage}"),
     )
+    table.add_row("Provider", estimate.provider)
     table.add_row("Model", estimate.model)
     table.add_row("Web search", _format_web_search_status(estimate))
+    table.add_row("Web reader", estimate.web_reader or "none")
+    table.add_row("Evidence", f"{len(estimate.evidence)} source(s)")
     table.add_row("Window", _format_ai_estimate_window(estimate))
     table.add_row("Confidence", estimate.confidence)
     table.add_row("Rationale", estimate.rationale)
@@ -1771,6 +1818,21 @@ def _print_ai_window_estimate(estimate: AIWindowEstimate) -> None:
             )
 
         console.print(sources_table)
+
+    if estimate.evidence:
+        evidence_table = Table(title="Gathered web evidence", expand=False)
+        evidence_table.add_column("#", justify="right", no_wrap=True)
+        evidence_table.add_column("Title", overflow="fold", max_width=40)
+        evidence_table.add_column("URL", overflow="fold", max_width=70)
+
+        for index, evidence in enumerate(estimate.evidence, start=1):
+            evidence_table.add_row(
+                str(index),
+                evidence.title,
+                evidence.url,
+            )
+
+        console.print(evidence_table)
 
 
 def _format_web_search_status(estimate: AIWindowEstimate) -> str:

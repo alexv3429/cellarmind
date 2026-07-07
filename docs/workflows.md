@@ -1,92 +1,37 @@
 # Workflows
 
-## Import
+This document describes practical CellarMind workflows.
 
-Basic format (CSV)
+## Import and audit a cellar
 
-↓
+```bash
+mkdir -p data/private
+cp /path/to/your/cave.csv data/private/cave.csv
 
-Validate
+uv run cellarmind inspect data/private/cave.csv
+uv run cellarmind validate data/private/cave.csv
+uv run cellarmind normalize data/private/cave.csv --output /tmp/cave.canonical.csv
+uv run cellarmind import data/private/cave.csv --database data/private/cellarmind.sqlite
 
-↓
+uv run cellarmind db stats --path data/private/cellarmind.sqlite
+uv run cellarmind db audit --path data/private/cellarmind.sqlite
+```
 
-Normalize
+Use `--cellar-map` when location codes imply cellar names:
 
-↓
+```bash
+uv run cellarmind import data/private/cave.csv \
+  --database data/private/cellarmind.sqlite \
+  --cellar-map data/private/cellar-map.csv
+```
 
-Import into database (SQLite)
+## Manual bottle management
 
-## Enrichment
-
-WineVariant
-
-↓
-
-Providers
-
-↓
-
-Evidence
-
-↓
-
-Scoring
-
-↓
-
-Interpolation
-
-↓
-
-DrinkWindow
-
-## Consumption
-
-Search
-
-↓
-
-Select bottle
-
-↓
-
-Open bottle
-
-↓
-
-Taste
-
-↓
-
-Record tasting
-
-↓
-
-Update bottle status
-
-## Organize
-
-Search
-
-↓
-
-Select bottle
-
-↓
-
-Move bottle
-
-↓
-
-Create / update bottle location
-
-## Add bottles manually
-
-CellarMind can add physical bottles without importing a CSV.
+Add bottles manually:
 
 ```bash
 uv run cellarmind bottle add \
-  --database data/cellarmind.sqlite \
+  --database data/private/cellarmind.sqlite \
   --producer "Domaine Test" \
   --cuvee "Cuvée Test" \
   --vintage 2020 \
@@ -95,217 +40,126 @@ uv run cellarmind bottle add \
   --format 750ml \
   --quantity 2 \
   --cellar "Main cellar" \
-  --location "A12" \
-  --purchase-price 42 \
-  --personal-drink-from-year 2025 \
-  --personal-drink-until-year 2030
+  --location "A12"
 ```
 
-## Move a bottle
-
-CellarMind tracks bottle locations through location history.
-
-To move a physical bottle:
+Move a bottle:
 
 ```bash
 uv run cellarmind bottle move 123 \
-  --database data/cellarmind.sqlite \
+  --database data/private/cellarmind.sqlite \
   --cellar "Main cellar" \
   --location "A12"
 ```
 
-## Update bottle status
-
-CellarMind can update the lifecycle status of a physical bottle.
-
-Mark a bottle as opened:
-
-```⁠bash
-uv run cellarmind bottle mark-opened 123 \
-  --database data/cellarmind.sqlite
-```
-
-Alternatively, a bottle can be marked as out of the cellar using status:
-
-- `mark-consumed`
-- `mark-sold`
-- `mark-gifted`
-- `mark-lost`
-
-## Audit an imported cellar
-
-After importing a cellar CSV into SQLite, CellarMind can produce an audit summary.
+Update status:
 
 ```bash
-uv run cellarmind db audit --path data/cellarmind.sqlite
+uv run cellarmind bottle mark-opened 123 --database data/private/cellarmind.sqlite
+uv run cellarmind bottle mark-consumed 123 --database data/private/cellarmind.sqlite
+uv run cellarmind bottle mark-gifted 123 --database data/private/cellarmind.sqlite
+uv run cellarmind bottle mark-sold 123 --database data/private/cellarmind.sqlite
+uv run cellarmind bottle mark-lost 123 --database data/private/cellarmind.sqlite
 ```
 
-## Configure cellar profiles
+Out-of-cellar statuses close the active location. Opened bottles keep their active location.
 
-CellarMind can  store the intended role and approximate capacity of each cellar.
+## Cellar profiles
 
 ```bash
 uv run cellarmind cellar update "Main cellar" \
-  --database data/cellarmind.sqlite \
+  --database data/private/cellarmind.sqlite \
   --purpose aging \
   --capacity-estimate 350 \
-  --capacity-warning-threshold 330
+  --capacity-warning-threshold 330 \
+  --notes "Main long-term aging cellar"
+
+uv run cellarmind cellar list --database data/private/cellarmind.sqlite
 ```
 
-## Audit cellar placement
+Supported purposes:
 
-After configuring cellar profiles, CellarMind can audit cellar placement.
+```text
+aging
+drink_soon
+mixed
+staging
+overflow
+```
+
+## Placement and drinking reports
 
 ```bash
 uv run cellarmind report placement \
-  --database data/cellarmind.sqlite
-```
+  --database data/private/cellarmind.sqlite \
+  --year 2026 \
+  --limit 50
 
-The placement report combines:
-
-- active bottle locations;
-- bottle lifecycle status;
-- cellar purpose;
-- approximate cellar capacity;
-- personal drinking windows.
-
-Examples of detected placement issues:
-
-- bottle without active location;
-- bottle in a staging cellar;
-- bottle in an overflow cellar;
-- too-young bottle in a `drink_soon` cellar;
-- ready or overdue bottle still in an `aging` cellar;
-- cellar near or over approximate capacity.
-
-Use `--year` to evaluate drinking windows against a specific year:
-
-```bash
-uv run cellarmind report placement \
-  --database data/cellarmind.sqlite \
-  --year 2026
-```
-
-The report is read-only. It does not move bottles automatically.
-
-## Plan cellar transfers
-
-After running the placement report, CellarMind can turn placement issues into a
-dry-run transfer plan.
-
-```bash
 uv run cellarmind plan transfers \
-  --database data/cellarmind.sqlite \
+  --database data/private/cellarmind.sqlite \
   --year 2026 \
-  --limit 30
-```
+  --limit 50
 
-The plan is advisory. It suggests target cellars when possible, but it does not
-assign exact physical slots and does not apply moves.
-
-Typical suggestions include:
-
-- moving too-young bottles from `drink_soon` cellars to `aging` cellars;
-- moving ready or overdue bottles from `aging` cellars to `drink_soon` cellars;
-- reviewing bottles in `staging` or `overflow` cellars;
-- reviewing bottles without an active location.
-
-## Report drinking windows
-
-CellarMind can classify active bottles according to personal drinking windows.
-
-```bash
 uv run cellarmind report drinking-window \
-  --database data/cellarmind.sqlite \
+  --database data/private/cellarmind.sqlite \
   --year 2026 \
   --limit 50
-```
 
-The command is read-only and reports:
-
-- overdue bottles;
-- bottles ready to drink;
-- bottles that are still too young;
-- bottles with unknown personal drinking windows.
-
-Only active bottles are included. Bottles marked as `consumed`, `gifted`, `sold`,
-or `lost` are excluded.
-
-## Recommend bottles to drink
-
-After importing bottles and personal drinking windows, CellarMind can recommend
-what to drink, hold, or review.
-
-```bash
 uv run cellarmind recommend drinking \
-  --database data/cellarmind.sqlite \
+  --database data/private/cellarmind.sqlite \
   --year 2026 \
   --limit 50
 ```
 
-The recommendation command combines:
+These commands are advisory and read-only.
 
-- active bottle status;
-- personal drinking windows;
-- cellar purpose;
-- current location.
+Drinking-window classifications:
 
-Typical actions are:
+```text
+overdue
+ready
+too_young
+unknown
+```
 
-- `drink_now` for opened or overdue bottles;
-- `consider_drinking` for bottles that are ready but not urgent;
-- `hold` for bottles that are too young;
-- `review` for bottles with missing location or missing drinking-window data.
+Recommendation actions:
 
-The command is advisory and read-only.
+```text
+drink_now
+consider_drinking
+hold
+review
+```
 
-## Add reference drinking windows
+## Reference-window workflow
 
-Reference drinking windows can be added manually.
+Add a manual reference:
 
 ```bash
 uv run cellarmind reference-window add \
-  --database data/cellarmind.sqlite \
+  --database data/private/cellarmind.sqlite \
   --wine-id 123 \
   --source-name "Producer note" \
-  --source-url "https://example.com" \
+  --source-url "https://example.com/wine-page" \
   --drink-from-year 2024 \
   --drink-until-year 2032 \
-  --confidence medium \
-  --notes "Manual reference"
+  --confidence medium
 ```
 
-Reference windows are local data. This command does not fetch data from the
-internet and does not overwrite personal drinking windows.
-
-## Compare drinking-window evidence
-
-After adding reference drinking windows, compare them with personal windows:
-
-```bash
-uv run cellarmind report window-comparison \
-  --database data/cellarmind.sqlite \
-  --tolerance-years 2 \
-  --limit 50
-```
-
-## Fetch a reference drinking window from a web page
-
-Use `reference-window fetch` when you have a producer, merchant, critic, or
-other source page that mentions a drinking window.
+Fetch a known URL:
 
 ```bash
 uv run cellarmind reference-window fetch \
-  --database data/cellarmind.sqlite \
+  --database data/private/cellarmind.sqlite \
   --wine-id 123 \
   --url "https://example.com/wine-page"
 ```
 
-Review the extracted candidate. Then save it explicitly:
+Save a fetched candidate explicitly:
 
 ```bash
 uv run cellarmind reference-window fetch \
-  --database data/cellarmind.sqlite \
+  --database data/private/cellarmind.sqlite \
   --wine-id 123 \
   --url "https://example.com/wine-page" \
   --source-name "Producer website" \
@@ -313,26 +167,164 @@ uv run cellarmind reference-window fetch \
   --save
 ```
 
-The fetched window is stored as reference evidence. It does not replace the
-personal drinking window.
-
-## Search online reference-window sources
-
-CellarMind can search for source pages related to a wine.
+Search online sources:
 
 ```bash
 uv run cellarmind reference-window search \
-  --database data/cellarmind.sqlite \
-  --wine-id 123
+  --database data/private/cellarmind.sqlite \
+  --wine-id 123 \
+  --limit 10
 ```
 
-## Estimate a drinking window with AI
-
-Use AI estimates when direct source pages are missing, blocked, or ambiguous.
+Search with fetch:
 
 ```bash
-export OPENAI_API_KEY="..."
+uv run cellarmind reference-window search \
+  --database data/private/cellarmind.sqlite \
+  --wine-id 123 \
+  --fetch \
+  --limit 10
+```
+
+Compare personal and reference windows:
+
+```bash
+uv run cellarmind report window-comparison \
+  --database data/private/cellarmind.sqlite \
+  --tolerance-years 2 \
+  --limit 50
+```
+
+Reference windows never overwrite personal windows automatically.
+
+## OpenAI estimate workflow
+
+Set an API key:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+```
+
+Dry-run:
+
+```bash
 uv run cellarmind reference-window estimate \
-  --database data/cellarmind.sqlite \
-  --wine-id 123
+  --database data/private/cellarmind.sqlite \
+  --wine-id 123 \
+  --provider openai
+```
+
+Save:
+
+```bash
+uv run cellarmind reference-window estimate \
+  --database data/private/cellarmind.sqlite \
+  --wine-id 123 \
+  --provider openai \
+  --save
+```
+
+Cheaper no-web-search mode:
+
+```bash
+uv run cellarmind reference-window estimate \
+  --database data/private/cellarmind.sqlite \
+  --wine-id 123 \
+  --provider openai \
+  --no-web-search
+```
+
+OpenAI estimates are saved as:
+
+```text
+source_name = "AI estimate (OpenAI)"
+source_url = NULL
+```
+
+## Local Ollama + Jina Reader workflow
+
+Start Ollama and pull a model:
+
+```bash
+ollama serve
+ollama pull llama3.1
+```
+
+Dry-run with local AI and web evidence:
+
+```bash
+uv run cellarmind reference-window estimate \
+  --database data/private/cellarmind.sqlite \
+  --wine-id 123 \
+  --provider ollama \
+  --model llama3.1
+```
+
+Save:
+
+```bash
+uv run cellarmind reference-window estimate \
+  --database data/private/cellarmind.sqlite \
+  --wine-id 123 \
+  --provider ollama \
+  --model llama3.1 \
+  --save
+```
+
+Use only search snippets, without Jina Reader:
+
+```bash
+uv run cellarmind reference-window estimate \
+  --database data/private/cellarmind.sqlite \
+  --wine-id 123 \
+  --provider ollama \
+  --model llama3.1 \
+  --web-reader none
+```
+
+Fully local, no web evidence:
+
+```bash
+uv run cellarmind reference-window estimate \
+  --database data/private/cellarmind.sqlite \
+  --wine-id 123 \
+  --provider ollama \
+  --model llama3.1 \
+  --no-web-search
+```
+
+Local estimates are saved as:
+
+```text
+source_name = "AI estimate (local)"
+source_url = NULL
+```
+
+## Real-cellar test sequence
+
+```bash
+uv run cellarmind list bottles --database data/private/cellarmind.sqlite --limit 30
+
+uv run cellarmind reference-window search \
+  --database data/private/cellarmind.sqlite \
+  --wine-id 123 \
+  --limit 10
+
+uv run cellarmind reference-window estimate \
+  --database data/private/cellarmind.sqlite \
+  --wine-id 123 \
+  --provider ollama \
+  --model llama3.1
+
+uv run cellarmind reference-window estimate \
+  --database data/private/cellarmind.sqlite \
+  --wine-id 123 \
+  --provider ollama \
+  --model llama3.1 \
+  --save
+
+uv run cellarmind report window-comparison \
+  --database data/private/cellarmind.sqlite \
+  --tolerance-years 2 \
+  --limit 50
 ```
