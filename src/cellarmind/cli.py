@@ -324,6 +324,25 @@ ReferenceSearchLimitOption = Annotated[
     ),
 ]
 
+ReferenceSearchQueryOption = Annotated[
+    str | None,
+    typer.Option(
+        "--query",
+        help="Optional search query override.",
+    ),
+]
+
+InsecureSkipTlsVerifyOption = Annotated[
+    bool,
+    typer.Option(
+        "--insecure-skip-tls-verify",
+        help=(
+            "Skip TLS certificate verification for explicitly chosen source URLs. "
+            "Use only when a site has a broken certificate chain."
+        ),
+    ),
+]
+
 FetchReferenceCandidatesOption = Annotated[
     bool,
     typer.Option(
@@ -975,6 +994,7 @@ def fetch_reference_window_command(
     confidence: ReferenceConfidenceOption = None,
     timeout_seconds: ReferenceFetchTimeoutOption = 15.0,
     save: SaveReferenceWindowOption = False,
+    insecure_skip_tls_verify: InsecureSkipTlsVerifyOption = False,
 ) -> None:
     """Fetch a reference drinking window from a source URL."""
     try:
@@ -982,6 +1002,7 @@ def fetch_reference_window_command(
             source_url=source_url,
             source_name=source_name,
             timeout_seconds=timeout_seconds,
+            verify_tls=not insecure_skip_tls_verify,
         )
     except ValueError as error:
         raise typer.BadParameter(str(error)) from error
@@ -1002,6 +1023,7 @@ def fetch_reference_window_command(
             source_name=source_name,
             confidence=confidence,
             timeout_seconds=timeout_seconds,
+            verify_tls=not insecure_skip_tls_verify,
         )
     except FileNotFoundError as error:
         raise typer.BadParameter(str(error)) from error
@@ -1018,6 +1040,7 @@ def search_reference_window_command(
     limit: ReferenceSearchLimitOption = 5,
     fetch: FetchReferenceCandidatesOption = False,
     timeout_seconds: ReferenceFetchTimeoutOption = 15.0,
+    query: ReferenceSearchQueryOption = None,
 ) -> None:
     """Search online sources for reference drinking windows."""
     try:
@@ -1027,6 +1050,7 @@ def search_reference_window_command(
             limit=limit,
             fetch_candidates=fetch,
             timeout_seconds=timeout_seconds,
+            query_override=query,
         )
     except FileNotFoundError as error:
         raise typer.BadParameter(str(error)) from error

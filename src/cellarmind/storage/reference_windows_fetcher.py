@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import re
+import ssl
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
@@ -8,10 +10,16 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+import certifi
+
 from cellarmind.storage.reference_windows import (
     ReferenceDrinkingWindow,
     add_reference_window,
 )
+
+DEFAULT_USER_AGENT = "CellarMind/0.1 (reference-window extraction; manual user request)"
+
+HTTP_USER_AGENT_ENV = "CELLARMIND_HTTP_USER_AGENT"
 
 VALID_CONFIDENCES = {"low", "medium", "high"}
 
@@ -144,6 +152,7 @@ def fetch_reference_window_candidate(
     source_url: str,
     source_name: str | None = None,
     timeout_seconds: float = 15.0,
+    verify_tls: bool = True,
 ) -> ReferenceWindowCandidate:
     normalized_url = _validate_url(source_url)
     resolved_source_name = _normalize_source_name(
@@ -154,6 +163,7 @@ def fetch_reference_window_candidate(
     html = fetch_url_text(
         normalized_url,
         timeout_seconds=timeout_seconds,
+        verify_tls=verify_tls,
     )
     text = html_to_text(html)
 
@@ -177,11 +187,13 @@ def fetch_and_add_reference_window(
     source_name: str | None = None,
     confidence: str | None = None,
     timeout_seconds: float = 15.0,
+    verify_tls: bool = True,
 ) -> ReferenceDrinkingWindow:
     candidate = fetch_reference_window_candidate(
         source_url=source_url,
         source_name=source_name,
         timeout_seconds=timeout_seconds,
+        verify_tls=verify_tls,
     )
 
     resolved_confidence = (
@@ -260,24 +272,34 @@ def fetch_url_text(
     *,
     timeout_seconds: float,
     max_bytes: int = 2_000_000,
+    verify_tls: bool = True,
 ) -> str:
     request = Request(
         source_url,
-        headers={
-            "User-Agent": ("CellarMind/0.1 (reference-window extraction; manual user request)")
-        },
+        headers=_http_headers(),
     )
 
+    context = _build_ssl_context(verify_tls=verify_tls)
+
     try:
-        with urlopen(request, timeout=timeout_seconds) as response:
+        with urlopen(request, timeout=timeout_seconds, context=context) as response:
             charset = response.headers.get_content_charset() or "utf-8"
             raw = response.read(max_bytes + 1)
     except HTTPError as error:
+        if error.code == 403:
+            raise ValueError(
+                "Could not fetch URL: HTTP 403 Forbidden. "
+                "The site refused automated access. "
+                "Try another source URL, or add the reference window manually."
+            ) from error
+
         raise ValueError(f"Could not fetch URL: HTTP {error.code}") from error
     except URLError as error:
         raise ValueError(f"Could not fetch URL: {error.reason}") from error
     except TimeoutError as error:
         raise ValueError("Could not fetch URL: request timed out.") from error
+    except ssl.SSLError as error:
+        raise ValueError(f"Could not fetch URL: TLS verification failed: {error}") from error
 
     if len(raw) > max_bytes:
         raw = raw[:max_bytes]
@@ -357,3 +379,27 @@ class _HTMLTextExtractor(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._skip_depth == 0 and data.strip():
             self.parts.append(data.strip())
+
+
+def _build_ssl_context(*, verify_tls: bool) -> ssl.SSLContext | None:
+    if not verify_tls:
+        return ssl._create_unverified_context()
+
+    ca_bundle = os.environ.get("CELLARMIND_CA_BUNDLE")
+
+    if ca_bundle:
+        return ssl.create_default_context(cafile=ca_bundle)
+
+    return ssl.create_default_context(cafile=certifi.where())
+
+
+def _http_headers() -> dict[str, str]:
+    return {
+        "User-Agent": os.environ.get(
+            HTTP_USER_AGENT_ENV,
+            DEFAULT_USER_AGENT,
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,/;q=0.8",
+        "Accept-Language": "en-US,en;q=0.8,fr;q=0.7",
+        "Connection": "close",
+    }

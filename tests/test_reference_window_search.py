@@ -5,6 +5,7 @@ from typer.testing import CliRunner
 from cellarmind.cli import app
 from cellarmind.importing.sqlite_importer import import_csv_to_database
 from cellarmind.storage.reference_window_search import (
+    _RawSearchResult,
     build_reference_window_search_query,
     search_reference_window_sources,
 )
@@ -34,20 +35,23 @@ def test_reference_window_search_returns_results(monkeypatch, tmp_path: Path) ->
     database_path = _create_database_with_wine(tmp_path)
     wine_id = _get_wine_id(database_path)
 
-    def fake_fetch_search_html(url: str, *, timeout_seconds: float) -> str:
-        return """
-        <html>
-          <body>
-            <a class="result__a" href="https://example.com/wine">
-              Example Wine Page
-            </a>
-          </body>
-        </html>
-        """
+    def fake_search_ddgs(
+        *,
+        query: str,
+        limit: int,
+        timeout_seconds: float,
+    ) -> tuple[_RawSearchResult, ...]:
+        return (
+            _RawSearchResult(
+                title="Example Wine Page",
+                url="https://example.com/wine",
+                snippet="Example snippet",
+            ),
+        )
 
     monkeypatch.setattr(
-        "cellarmind.storage.reference_window_search._fetch_search_html",
-        fake_fetch_search_html,
+        "cellarmind.storage.reference_window_search._search_ddgs",
+        fake_search_ddgs,
     )
 
     report = search_reference_window_sources(
@@ -71,16 +75,19 @@ def test_reference_window_search_fetches_candidates(
     database_path = _create_database_with_wine(tmp_path)
     wine_id = _get_wine_id(database_path)
 
-    def fake_fetch_search_html(url: str, *, timeout_seconds: float) -> str:
-        return """
-        <html>
-          <body>
-            <a class="result__a" href="https://example.com/wine">
-              Example Wine Page
-            </a>
-          </body>
-        </html>
-        """
+    def fake_search_ddgs(
+        *,
+        query: str,
+        limit: int,
+        timeout_seconds: float,
+    ) -> tuple[_RawSearchResult, ...]:
+        return (
+            _RawSearchResult(
+                title="Example Wine Page",
+                url="https://example.com/wine",
+                snippet="Example snippet",
+            ),
+        )
 
     def fake_fetch_reference_window_candidate(
         *,
@@ -100,8 +107,8 @@ def test_reference_window_search_fetches_candidates(
         )
 
     monkeypatch.setattr(
-        "cellarmind.storage.reference_window_search._fetch_search_html",
-        fake_fetch_search_html,
+        "cellarmind.storage.reference_window_search._search_ddgs",
+        fake_search_ddgs,
     )
     monkeypatch.setattr(
         "cellarmind.storage.reference_window_search.fetch_reference_window_candidate",
@@ -128,20 +135,23 @@ def test_reference_window_search_command_outputs_results(
     database_path = _create_database_with_wine(tmp_path)
     wine_id = _get_wine_id(database_path)
 
-    def fake_fetch_search_html(url: str, *, timeout_seconds: float) -> str:
-        return """
-        <html>
-          <body>
-            <a class="result__a" href="https://example.com/wine">
-              Example Wine Page
-            </a>
-          </body>
-        </html>
-        """
+    def fake_search_ddgs(
+        *,
+        query: str,
+        limit: int,
+        timeout_seconds: float,
+    ) -> tuple[_RawSearchResult, ...]:
+        return (
+            _RawSearchResult(
+                title="Example Wine Page",
+                url="https://example.com/wine",
+                snippet="Example snippet",
+            ),
+        )
 
     monkeypatch.setattr(
-        "cellarmind.storage.reference_window_search._fetch_search_html",
-        fake_fetch_search_html,
+        "cellarmind.storage.reference_window_search._search_ddgs",
+        fake_search_ddgs,
     )
 
     result = runner.invoke(
@@ -192,37 +202,3 @@ def _get_wine_id(database_path: Path) -> int:
     assert row is not None
 
     return int(row["id"])
-
-
-def test_reference_window_search_normalizes_duckduckgo_relative_result(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    database_path = _create_database_with_wine(tmp_path)
-    wine_id = _get_wine_id(database_path)
-
-    def fake_fetch_search_html(url: str, *, timeout_seconds: float) -> str:
-        return """
-        <html>
-          <body>
-            <a class="result__a"
-               href="/l/?kh=-1&uddg=https%3A%2F%2Fexample.com%2Fwine">
-              Example Wine Page
-            </a>
-          </body>
-        </html>
-        """
-
-    monkeypatch.setattr(
-        "cellarmind.storage.reference_window_search._fetch_search_html",
-        fake_fetch_search_html,
-    )
-
-    report = search_reference_window_sources(
-        database_path,
-        wine_id=wine_id,
-        limit=5,
-    )
-
-    assert len(report.results) == 1
-    assert report.results[0].url == "https://example.com/wine"
