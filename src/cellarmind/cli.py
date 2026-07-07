@@ -1125,6 +1125,14 @@ AIProviderOption = Annotated[
     ),
 ]
 
+AIWebSearchProviderOption = Annotated[
+    str,
+    typer.Option(
+        "--search-provider",
+        help="Web search provider for local AI estimates: ddgs or jina.",
+    ),
+]
+
 AIWebReaderOption = Annotated[
     str,
     typer.Option(
@@ -1161,6 +1169,7 @@ def estimate_reference_window_command(
     model: AIModelOption = None,
     web_search: AIWebSearchOption = True,
     web_reader: AIWebReaderOption = "jina",
+    search_provider: AIWebSearchProviderOption = "ddgs",
     evidence_limit: AIEvidenceLimitOption = 5,
     ollama_host: OllamaHostOption = None,
     save: SaveAIEstimateOption = False,
@@ -1174,6 +1183,7 @@ def estimate_reference_window_command(
             model=model,
             use_web_search=web_search,
             web_reader=web_reader,
+            web_search_provider=search_provider,
             evidence_limit=evidence_limit,
             ollama_host=ollama_host,
         )
@@ -1784,6 +1794,7 @@ def _print_ai_window_estimate(estimate: AIWindowEstimate) -> None:
     table.add_row("Provider", estimate.provider)
     table.add_row("Model", estimate.model)
     table.add_row("Web search", _format_web_search_status(estimate))
+    table.add_row("Search provider", estimate.web_search_provider or "none")
     table.add_row("Web reader", estimate.web_reader or "none")
     table.add_row("Evidence", f"{len(estimate.evidence)} source(s)")
     table.add_row("Window", _format_ai_estimate_window(estimate))
