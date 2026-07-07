@@ -328,7 +328,7 @@ ReferenceSearchQueryOption = Annotated[
     str | None,
     typer.Option(
         "--query",
-        help="ptional search query override.",
+        help="Optional search query override.",
     ),
 ]
 
@@ -337,7 +337,7 @@ InsecureSkipTlsVerifyOption = Annotated[
     typer.Option(
         "--insecure-skip-tls-verify",
         help=(
-            "Skip TLS certificate verification for explictily chosen source URLs. "
+            "Skip TLS certificate verification for explicitly chosen source URLs. "
             "Use only when a site has a broken certificate chain."
         ),
     ),
