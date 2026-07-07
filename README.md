@@ -425,3 +425,18 @@ Implemented so far:
 - OpenAI drinking-window estimates
 - local Ollama drinking-window estimates with Jina Reader evidence gathering
 - tests and GitHub Actions CI
+
+
+## Gemini drinking-window estimates
+
+Gemini estimates use `GEMINI_API_KEY` and optional Google Search grounding.
+
+```bash
+export GEMINI_API_KEY="..."
+uv run cellarmind reference-window estimate \
+  --database data/private/cellarmind.sqlite \
+  --wine-id 123 \
+  --provider gemini
+```
+
+Saved rows use `source_name = "AI estimate (Gemini)"`.
