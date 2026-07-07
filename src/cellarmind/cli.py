@@ -9,6 +9,11 @@ from cellarmind.importing.normalizer import normalize_csv_to_canonical
 from cellarmind.importing.schema import validate_csv_schema
 from cellarmind.importing.sqlite_importer import import_csv_to_database
 from cellarmind.infrastructure.csv_inspector import inspect_csv
+from cellarmind.storage.ai_window_estimator import (
+    AIWindowEstimate,
+    add_ai_reference_window_from_estimate,
+    estimate_ai_drinking_window,
+)
 from cellarmind.storage.audit import AuditBreakdownRow, audit_database
 from cellarmind.storage.bottle_addition import add_bottles
 from cellarmind.storage.bottle_movement import move_bottle
@@ -348,6 +353,30 @@ FetchReferenceCandidatesOption = Annotated[
     typer.Option(
         "--fetch/--no-fetch",
         help="Fetch result pages and try to extract drinking-window candidates.",
+    ),
+]
+
+AIModelOption = Annotated[
+    str | None,
+    typer.Option(
+        "--model",
+        help=("OpenAI model to use. Defaults to CELLARMIND_OPENAI_MODEL or the project default."),
+    ),
+]
+
+AIWebSearchOption = Annotated[
+    bool,
+    typer.Option(
+        "--web-search/--no-web-search",
+        help="Allow the AI model to use web search for source-backed estimates.",
+    ),
+]
+
+SaveAIEstimateOption = Annotated[
+    bool,
+    typer.Option(
+        "--save/--dry-run",
+        help="Save the AI estimate as a reference drinking window.",
     ),
 ]
 
@@ -1088,6 +1117,47 @@ def _print_audit_summary(report) -> None:
     console.print(table)
 
 
+@reference_window_app.command("estimate")
+def estimate_reference_window_command(
+    wine_id: ReferenceWineIdOption,
+    database: ImportDatabasePathOption = DEFAULT_DATABASE_PATH,
+    model: AIModelOption = None,
+    web_search: AIWebSearchOption = True,
+    save: SaveAIEstimateOption = False,
+) -> None:
+    """Estimate a drinking window with AI."""
+    try:
+        estimate = estimate_ai_drinking_window(
+            database,
+            wine_id=wine_id,
+            model=model,
+            use_web_search=web_search,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Database: {database}")
+    _print_ai_window_estimate(estimate)
+
+    if not save:
+        console.print("Dry-run only. Re-run with --save to store this AI estimate.")
+        return
+
+    try:
+        window = add_ai_reference_window_from_estimate(
+            database,
+            estimate=estimate,
+        )
+    except FileNotFoundError as error:
+        raise typer.BadParameter(str(error)) from error
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    console.print(f"Saved AI reference drinking window {window.id} for wine {window.wine_id}.")
+
+
 def _print_audit_breakdown(
     title: str,
     rows: tuple[AuditBreakdownRow, ...],
@@ -1655,3 +1725,66 @@ def _print_reference_window_search_report(
         )
 
     console.print(table)
+
+
+def _print_ai_window_estimate(estimate: AIWindowEstimate) -> None:
+    table = Table(title="AI drinking-window estimate", expand=False)
+    table.add_column("Field", no_wrap=True)
+    table.add_column("Value", overflow="fold", max_width=90)
+
+    table.add_row("Wine ID", str(estimate.wine.wine_id))
+    table.add_row(
+        "Wine",
+        (f"{estimate.wine.producer} — {estimate.wine.cuvee} {estimate.wine.vintage}"),
+    )
+    table.add_row("Model", estimate.model)
+    table.add_row("Web search", _format_web_search_status(estimate))
+    table.add_row("Window", _format_ai_estimate_window(estimate))
+    table.add_row("Confidence", estimate.confidence)
+    table.add_row("Rationale", estimate.rationale)
+
+    if estimate.usage is not None:
+        table.add_row(
+            "Usage",
+            (
+                f"input={estimate.usage.input_tokens or '?'} tokens, "
+                f"output={estimate.usage.output_tokens or '?'} tokens, "
+                f"total={estimate.usage.total_tokens or '?'} tokens"
+            ),
+        )
+
+    console.print(table)
+
+    if estimate.sources:
+        sources_table = Table(title="AI estimate sources", expand=False)
+        sources_table.add_column("#", justify="right", no_wrap=True)
+        sources_table.add_column("Title", overflow="fold", max_width=36)
+        sources_table.add_column("URL", overflow="fold", max_width=54)
+        sources_table.add_column("Note", overflow="fold", max_width=54)
+
+        for index, source in enumerate(estimate.sources, start=1):
+            sources_table.add_row(
+                str(index),
+                source.title,
+                source.url or "",
+                source.note or "",
+            )
+
+        console.print(sources_table)
+
+
+def _format_web_search_status(estimate: AIWindowEstimate) -> str:
+    if not estimate.web_search_enabled:
+        return "disabled"
+
+    if estimate.web_search_used:
+        return "enabled, used"
+
+    return "enabled, not used"
+
+
+def _format_ai_estimate_window(estimate: AIWindowEstimate) -> str:
+    from_year = str(estimate.drink_from_year) if estimate.drink_from_year is not None else "?"
+    until_year = str(estimate.drink_until_year) if estimate.drink_until_year is not None else "?"
+
+    return f"{from_year}-{until_year}"

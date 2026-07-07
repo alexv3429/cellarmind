@@ -325,3 +325,14 @@ uv run cellarmind reference-window search \
   --database data/cellarmind.sqlite \
   --wine-id 123
 ```
+
+## Estimate a drinking window with AI
+
+Use AI estimates when direct source pages are missing, blocked, or ambiguous.
+
+```bash
+export OPENAI_API_KEY="..."
+uv run cellarmind reference-window estimate \
+  --database data/cellarmind.sqlite \
+  --wine-id 123
+```

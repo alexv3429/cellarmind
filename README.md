@@ -509,6 +509,29 @@ uv run cellarmind reference-window search \
   --wine-id 123
 ```
 
+## AI drinking-window estimates
+
+CellarMind can ask an AI provider for an estimated drinking window.
+
+Dry-run:
+
+```bash
+uv run cellarmind reference-window estimate \
+  --database data/cellarmind.sqlite \
+  --wine-id 123
+```
+
+Save explicitly:
+
+```bash
+uv run cellarmind reference-window estimate \
+  --database data/cellarmind.sqlite \
+  --wine-id 123 \
+  --save
+```
+
+This command uses `OPENAI_API_KEY` from the environment.
+
 ## Development
 
 Run the full local check suite:
