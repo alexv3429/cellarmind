@@ -54,7 +54,7 @@ def _read_jina_search(*, query: str, timeout_seconds: float) -> str:
 
 def _jina_search_url(query: str) -> str:
     base_url = environ.get(JINA_SEARCH_BASE_URL_ENV, DEFAULT_JINA_SEARCH_BASE_URL)
-    return f"{base_url.rstrip('/')}/{quote(query)}"
+    return f"{base_url.rstrip('/')}/{quote(query, safe='')}"
 
 
 def _parse_jina_search_results(body: str, *, limit: int) -> tuple[JinaSearchResult, ...]:
